@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-        # We pull to the defa ult  works[pace first to prep the files
+        # We pull to the defa ult  workspace first to prep the files
       
       - name: Sync Files to F Drive
         run: |
