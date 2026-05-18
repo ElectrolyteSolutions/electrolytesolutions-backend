@@ -3,12 +3,21 @@ const Product = require('../models/Products');
 // Using async/await with try-catch for clean error handling
 exports.getProducts = async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    const { alert } = req.query;
+    let filterCondition = {};
+
+    // If '?alert=low-stock' parameter is attached to the request URL
+    if (alert === 'low-stock') {
+      filterCondition.quantity = { $lte: 0 };
+    }
+
+    const products = await Product.find(filterCondition).sort({ createdAt: -1 });
     res.status(200).json(products);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch products", error: err.message });
   }
 };
+
 
 exports.createProduct = async (req, res) => {
   try {
