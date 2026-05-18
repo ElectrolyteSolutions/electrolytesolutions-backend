@@ -18,7 +18,7 @@ jobs:
           # /MIR: Mirrors the directory (deletes files in F: that were deleted in Git)
           # /XD: Excludes folders we don't want to overwridte (like .git or existing node_modules)
           # We target the specific backend folder inside your ArisServer
-          robocopy . "F:\ERP\backend" /MIR /XD .git .github node_modules
+          robocopy . "F:\ERPServer\backend" /MIR /XD .git .github node_modules
           
           # Robocopy uses non-zero exit  codes for success (e.g., 1 means files were copied).
           # We force 'exis 0' so GitHub Actions doesn't think a successful copy is a "Failure".
