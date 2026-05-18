@@ -13,10 +13,10 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use('/api/products', productRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/devices', deviceRoutes);
-app.use('/api/billings', billingRoutes);
+app.use('/products', productRoutes);
+app.use('/customers', customerRoutes);
+app.use('/devices', deviceRoutes);
+app.use('/billings', billingRoutes);
 
 // Database Connection (Swap with your MongoDB URI)
 const DB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/inventory';
