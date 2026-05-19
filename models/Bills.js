@@ -4,6 +4,7 @@ const billItemSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product'},
   name: { type: String, required: true },
   price: { type: Number, required: true },
+  discount: { type: Number, default: 0 }, // ⚡ NEW: Stores item discount value in Rupees (Rs.)
   orderedQuantity: { type: Number, required: true },
   subTotal: { type: Number, required: true },
   isCustomLineItem: { type: Boolean, default: false }
@@ -20,7 +21,7 @@ const billSchema = new mongoose.Schema({
   items: [billItemSchema],
   totalAmount: { type: Number, required: true },
   lastUpdated: { type: String, default: () => new Date().toLocaleString() },
-  paid : { type:Boolean , default:true},
+  isPaid : { type:Boolean , default:true},
   originalInvoiceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Bill',

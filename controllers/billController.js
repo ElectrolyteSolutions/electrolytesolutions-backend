@@ -103,11 +103,11 @@ exports.createBill = async (req, res) => {
     // 1. Validate Stock Levels and compute item subtotals
     for (let item of items) {
       if (item.isCustomLineItem) {
-          item.productId = undefined; // Strips the lookup binding requirement
-          item.subTotal = Number(item.price) * Number(item.orderedQuantity);
-          computedTotal += item.subTotal;
-          continue; // Skips downstream Product database checks for this loop iteration
-        }
+        item.productId = undefined; // Strips the lookup binding requirement
+        item.subTotal = Number(item.price) * Number(item.orderedQuantity);
+        computedTotal += item.subTotal;
+        continue; // Skips downstream Product database checks for this loop iteration
+      }
 
       const product = await Product.findById(item.productId);
       if (!product) {
@@ -122,7 +122,7 @@ exports.createBill = async (req, res) => {
       item.name = product.name;
       item.brand = product.brand;
       item.modelName = product.modelName;
-      item.subTotal = item.price * item.orderedQuantity;
+      item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
       computedTotal += item.subTotal;
     }
 
@@ -168,6 +168,99 @@ exports.createBill = async (req, res) => {
     res.status(201).json(savedBill);
   } catch (err) {
     res.status(400).json({ message: "Billing transaction failed", error: err.message });
+  }
+};
+
+// ⚡ NEW API: Handles structural updates & stock tracking logic for editing/appending items inside existing bills
+exports.updateBill = async (req, res) => {
+  try {
+    const { items, serviceCharge } = req.body;
+    const billId = req.params.id;
+
+    // 1. Fetch targeted historical invoice document
+    const oldBill = await Bill.findById(billId);
+    if (!oldBill) {
+      return res.status(404).json({ message: "Invoice registry record not found" });
+    }
+
+    let computedTotal = 0;
+    const finalizedProcessedItems = [];
+
+    // 2. Loop through incoming manifest row objects to evaluate delta stock reductions
+    for (let item of items) {
+      if (item.isCustomLineItem) {
+        // Handle virtual unstructured custom entries cleanly
+        const customSubTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+        computedTotal += customSubTotal;
+        finalizedProcessedItems.push({
+          name: item.name,
+          price: Number(item.price),
+          discount: Number(item.discount || 0),
+          orderedQuantity: Number(item.orderedQuantity),
+          subTotal: customSubTotal,
+          isCustomLineItem: true
+        });
+        continue;
+      }
+
+      // If it's an inventory catalog item, populate details from DB
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(404).json({ message: `Inventory product '${item.name}' not found` });
+      }
+
+      // 3. ⚡ DYNAMIC STOCK ALLOCATION CHECK
+      // If flag indicates a newly appended element line, evaluate current physical storage depth limits
+      if (item.isNewAppendItem && oldBill.purpose !== 'quotation') {
+        if (product.quantity < item.orderedQuantity) {
+          return res.status(400).json({ 
+            message: `Insufficient stock on store shelves to add ${product.brand} ${product.modelName}. Available: ${product.quantity}` 
+          });
+        }
+        
+        // Instantly deduct newly appended quantities from database inventory levels
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { quantity: -Number(item.orderedQuantity) },
+          $set: { lastUpdated: new Date().toLocaleString() }
+        });
+      }
+
+      // Process and compile standard schema item objects
+      const itemSubTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+      computedTotal += itemSubTotal;
+
+      finalizedProcessedItems.push({
+        productId: item.productId,
+        name: product.name,
+        brand: product.brand,
+        modelName: product.modelName,
+        price: Number(item.price),
+        discount: Number(item.discount || 0),
+        orderedQuantity: Number(item.orderedQuantity),
+        subTotal: itemSubTotal,
+        isCustomLineItem: false
+      });
+    }
+
+    // 4. Inject base labor metrics if processing repair tickets
+    if (oldBill.purpose === 'repair') {
+      computedTotal += Number(serviceCharge || 0);
+    }
+
+    // 5. Commit calculations back into base database document properties
+    oldBill.items = finalizedProcessedItems;
+    oldBill.serviceCharge = oldBill.purpose === 'repair' ? Number(serviceCharge || 0) : 0;
+    oldBill.totalAmount = computedTotal;
+    oldBill.lastUpdated = new Date().toLocaleString();
+
+    await oldBill.save();
+
+    // 6. Return fully populated context dataset straight back to your layout widgets thunk calls
+    const completedUpdatedBill = await Bill.findById(oldBill._id).populate('customer');
+    res.status(200).json(completedUpdatedBill);
+
+  } catch (err) {
+    res.status(500).json({ message: "Failed to save variations onto target invoice document", error: err.message });
   }
 };
 
