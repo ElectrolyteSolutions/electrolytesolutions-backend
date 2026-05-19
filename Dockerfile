@@ -1,12 +1,12 @@
-FROM node:18
+FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+# Copy package files first to leverage Docker caching layers
+COPY package*.json ./
 RUN npm install
 
-# Grant full read/write/execute permissions to everyone in the container
-
+# Copy the rest of the application code (ignores node_modules if .dockerignore exists)
 COPY . .
 
 EXPOSE 3005
