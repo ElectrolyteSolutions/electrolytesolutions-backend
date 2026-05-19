@@ -174,8 +174,8 @@ exports.createBill = async (req, res) => {
 exports.getBills = async (req, res) => {
   try {
     const bills = await Bill.find()
-      .populate('customer', 'name phone')
-      .populate('device', 'deviceName deviceHardwareId')
+      .populate('customer')
+      .populate('device')
       .sort({ createdAt: -1 });
     res.json(bills);
   } catch (err) {
