@@ -96,7 +96,7 @@ exports.processReturnBill = async (req, res) => {
 
 exports.createBill = async (req, res) => {
   try {
-    const { customer, purpose, device, serviceCharge, items } = req.body;
+    const { customer, purpose, device, serviceCharge, items,isPaid } = req.body;
 
     let computedTotal = 0;
 
@@ -137,6 +137,7 @@ exports.createBill = async (req, res) => {
       device: purpose === 'repair' ? device : undefined,
       serviceCharge: purpose === 'repair' ? serviceCharge : 0,
       items,
+      isPaid,
       totalAmount: computedTotal,
       lastUpdated: new Date().toLocaleString()
     });
@@ -174,7 +175,7 @@ exports.createBill = async (req, res) => {
 // ⚡ NEW API: Handles structural updates & stock tracking logic for editing/appending items inside existing bills
 exports.updateBill = async (req, res) => {
   try {
-    const { items, serviceCharge } = req.body;
+    const { items, serviceCharge,isPaid } = req.body;
     const billId = req.params.id;
 
     // 1. Fetch targeted historical invoice document
@@ -251,6 +252,7 @@ exports.updateBill = async (req, res) => {
     oldBill.items = finalizedProcessedItems;
     oldBill.serviceCharge = oldBill.purpose === 'repair' ? Number(serviceCharge || 0) : 0;
     oldBill.totalAmount = computedTotal;
+    oldBill.isPaid= isPaid
     oldBill.lastUpdated = new Date().toLocaleString();
 
     await oldBill.save();
