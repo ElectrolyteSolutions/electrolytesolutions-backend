@@ -104,7 +104,7 @@ exports.createBill = async (req, res) => {
     for (let item of items) {
       if (item.isCustomLineItem) {
         item.productId = undefined; // Strips the lookup binding requirement
-        item.subTotal = Number(item.price) * Number(item.orderedQuantity);
+        item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity)
         computedTotal += item.subTotal;
         continue; // Skips downstream Product database checks for this loop iteration
       }
