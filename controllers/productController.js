@@ -3,18 +3,49 @@ const Product = require('../models/Products');
 // Using async/await with try-catch for clean error handling
 exports.getProducts = async (req, res) => {
   try {
-    const { alert } = req.query;
+    const { alert, search, sortBy, sortOrder, brand, modelName } = req.query;
     let filterCondition = {};
 
-    // If '?alert=low-stock' parameter is attached to the request URL
+    // 1. Existing Alert Filter Configuration
     if (alert === 'low-stock') {
       filterCondition.quantity = { $lte: 0 };
     }
 
-    const products = await Product.find(filterCondition).sort({ createdAt: -1 });
+    // 2. Fuzzy Text Search Mapping (Matches product name case-insensitively)
+    if (search && search.trim() !== '') {
+      filterCondition.name = { $regex: search.trim(), $options: 'i' };
+    }
+
+    // 3. Dynamic Structural Attribute Filters
+    if (brand && brand.trim() !== '') {
+      filterCondition.brand = { $regex: brand.trim(), $options: 'i' };
+    }
+    
+    if (modelName && modelName.trim() !== '') {
+      filterCondition.modelName = { $regex: modelName.trim(), $options: 'i' };
+    }
+
+    // 4. Multi-Criteria Sorting Engine Dictionary Mapping Matrix
+    let sortExecutionObject = { createdAt: -1 }; // Default fallback orientation configuration key
+
+    if (sortBy) {
+      // Maps client shorthand keys directly to backend DB collection field tokens
+      let targetSortField = sortBy;
+      if (sortBy === 'qty') targetSortField = 'quantity';
+      if (sortBy === 'price') targetSortField = 'price';
+      if (sortBy === 'name') targetSortField = 'name';
+
+      // Evaluate asc/desc values (Defaulting to ascending 1 if parameters drop)
+      const executionDirection = sortOrder === 'desc' ? -1 : 1;
+      sortExecutionObject = { [targetSortField]: executionDirection };
+    }
+
+    // Execute aggregated Mongo queries matrix pipelines
+    const products = await Product.find(filterCondition).sort(sortExecutionObject);
+    
     res.status(200).json(products);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch products", error: err.message });
+    res.status(500).json({ message: "Failed to fetch filtered products matrix", error: err.message });
   }
 };
 
