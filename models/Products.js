@@ -4,6 +4,7 @@ const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
   quantity: { type: Number, required: true },
+  baseRate:{ type: Number, required: true },
   lastUpdated: { type: String, default: () => new Date().toLocaleString() }
 }, { timestamps: true });
 
