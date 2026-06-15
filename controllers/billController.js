@@ -30,6 +30,7 @@ exports.processReturnBill = async (req, res) => {
     }
 
     let dynamicRefundSubtotal = 0;
+    let computedProfitLoss = 0; // ⚡ NEW: Tracks the negative profit (ledger balancing)
     const itemsReturnedManifest = [];
 
     // 2. Map structural array data loops for validation & price matching
@@ -50,23 +51,36 @@ exports.processReturnBill = async (req, res) => {
         });
       }
 
-      // Calculate localized financial value variations
-      const currentLineRefund = originalItem.price * returnItem.quantity;
+      // Extract historical rates safely
+      const itemDiscount = Number(originalItem.discount || 0);
+      const itemBaseRate = Number(originalItem.baseRate || 0);
+
+      // ⚡ FINANCIAL FIX: Calculate refund respecting the original discount applied
+      const currentLineRefund = (Number(originalItem.price) - itemDiscount) * Number(returnItem.quantity);
       dynamicRefundSubtotal += currentLineRefund;
+
+      // ⚡ PROFIT REVERSAL: (Selling Price - Base Cost - Discount) * Returned Qty
+      // We subtract this because the business is losing the profit it originally claimed.
+      const lineProfitReversal = (Number(originalItem.price) - itemBaseRate - itemDiscount) * Number(returnItem.quantity);
+      computedProfitLoss -= lineProfitReversal; 
 
       itemsReturnedManifest.push({
         productId: originalItem.productId,
         name: originalItem.name,
-        price: originalItem.price,
-        orderedQuantity: returnItem.quantity, // Quantity being handed back to the shop
-        subTotal: currentLineRefund
+        price: Number(originalItem.price),
+        baseRate: itemBaseRate,   // Preserve original base rate mapping
+        discount: itemDiscount,   // Preserve original discount mapping
+        orderedQuantity: Number(returnItem.quantity), // Quantity handed back to the shop
+        subTotal: currentLineRefund,
+        isCustomLineItem: originalItem.isCustomLineItem || false
       });
 
       // 3. ⚡ INSTANT INVENTORY RESTOCK
-      // Skip stock increments if item was an ad-hoc custom line item charge
-      if (originalItem.productId && !originalItem.productId.toString().startsWith('CUSTOM-')) {
+      // Skip stock increments if item was a virtual/custom line item
+      if (!originalItem.isCustomLineItem && originalItem.productId) {
         await Product.findByIdAndUpdate(originalItem.productId, {
-          $inc: { quantity: returnItem.quantity }
+          $inc: { quantity: Number(returnItem.quantity) },
+          $set: { lastUpdated: new Date().toLocaleString() }
         });
       }
     }
@@ -78,13 +92,21 @@ exports.processReturnBill = async (req, res) => {
       originalInvoiceId: originalBillId,
       items: itemsReturnedManifest,
       serviceCharge: 0, // Labor is non-refundable 
-      totalAmount: dynamicRefundSubtotal
+      totalAmount: dynamicRefundSubtotal,
+      profit: computedProfitLoss, // ⚡ Commit the negative profit to balance the ledger
+      isPaid: true, // Assuming cash/refund is disbursed instantly
+      lastUpdated: new Date().toLocaleString()
     });
 
-    await returnBill.save();
+    const savedReturnBill = await returnBill.save();
+
+    // ⚡ Attach this return record to the customer's profile history
+    await Customer.findByIdAndUpdate(originalBill.customer, {
+      $push: { bills: savedReturnBill._id }
+    });
 
     // 5. Populate and return fresh receipt structure straight back to your frontend
-    const fullyPopulatedManifest = await Bill.findById(returnBill._id)
+    const fullyPopulatedManifest = await Bill.findById(savedReturnBill._id)
       .populate('customer');
 
     res.status(201).json(fullyPopulatedManifest);
@@ -96,16 +118,20 @@ exports.processReturnBill = async (req, res) => {
 
 exports.createBill = async (req, res) => {
   try {
-    const { customer, purpose, device, serviceCharge, items,isPaid } = req.body;
+    const { customer, purpose, device, serviceCharge, items, isPaid } = req.body;
 
     let computedTotal = 0;
+    let computedProfit = 0; // ⚡ NEW: Ledger variable to track true gross profit
 
     // 1. Validate Stock Levels and compute item subtotals
     for (let item of items) {
       if (item.isCustomLineItem) {
         item.productId = undefined; // Strips the lookup binding requirement
-        item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity)
+        item.baseRate = 0; // ⚡ Explicitly map virtual base rate to 0
+        item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+        
         computedTotal += item.subTotal;
+        computedProfit += item.subTotal; // ⚡ Custom components carry zero hardware cost, so they are 100% profit
         continue; // Skips downstream Product database checks for this loop iteration
       }
 
@@ -116,18 +142,28 @@ exports.createBill = async (req, res) => {
 
       // Block sales if inventory is depleted (only for non-quotations)
       if (purpose !== 'quotation' && product.quantity < item.orderedQuantity) {
-        return res.status(400).json({ message: `Insufficient stock for ${product.brand} ${product.modelName}` });
+        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
       }
 
       item.name = product.name;
       item.brand = product.brand;
       item.modelName = product.modelName;
+      item.baseRate = Number(product.baseRate || 0); // ⚡ Lock in historical base cost at time of sale
+      
       item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+      
+      // ⚡ PROFIT CALCULATION: (Selling Price - Base Cost - Applied Discount) * Qty
+      const itemProfit = (Number(item.price) - item.baseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
+
       computedTotal += item.subTotal;
+      computedProfit += itemProfit; // Add line profit to global bill profit
     }
 
+    // Add labor metrics if processing repair tickets
     if (purpose === 'repair') {
-      computedTotal += Number(serviceCharge || 0);
+      const numericServiceCharge = Number(serviceCharge || 0);
+      computedTotal += numericServiceCharge;
+      computedProfit += numericServiceCharge; // ⚡ Labor margins are strictly 100% profit markup
     }
 
     // 2. Persist the Bill Data
@@ -135,10 +171,11 @@ exports.createBill = async (req, res) => {
       customer,
       purpose,
       device: purpose === 'repair' ? device : undefined,
-      serviceCharge: purpose === 'repair' ? serviceCharge : 0,
+      serviceCharge: purpose === 'repair' ? Number(serviceCharge || 0) : 0,
       items,
       isPaid,
       totalAmount: computedTotal,
+      profit: computedProfit, // ⚡ Commit the final calculated profit margin into the DB document
       lastUpdated: new Date().toLocaleString()
     });
 
@@ -159,10 +196,13 @@ exports.createBill = async (req, res) => {
     // 5. Update Product Quantities (Skip execution if it's a quotation)
     if (purpose !== 'quotation') {
       for (let item of items) {
-        await Product.findByIdAndUpdate(item.productId, {
-          $inc: { quantity: -item.orderedQuantity },
-          $set: { lastUpdated: new Date().toLocaleString() }
-        });
+        // We ensure we skip custom line items here as they don't have a valid productId
+        if(!item.isCustomLineItem){
+            await Product.findByIdAndUpdate(item.productId, {
+              $inc: { quantity: -item.orderedQuantity },
+              $set: { lastUpdated: new Date().toLocaleString() }
+            });
+        }
       }
     }
 
@@ -172,10 +212,9 @@ exports.createBill = async (req, res) => {
   }
 };
 
-// ⚡ NEW API: Handles structural updates & stock tracking logic for editing/appending items inside existing bills
 exports.updateBill = async (req, res) => {
   try {
-    const { items, serviceCharge,isPaid } = req.body;
+    const { items, serviceCharge, isPaid } = req.body;
     const billId = req.params.id;
 
     // 1. Fetch targeted historical invoice document
@@ -185,6 +224,7 @@ exports.updateBill = async (req, res) => {
     }
 
     let computedTotal = 0;
+    let computedProfit = 0; // ⚡ NEW: Ledger variable to track true gross profit
     const finalizedProcessedItems = [];
 
     // 2. Loop through incoming manifest row objects to evaluate delta stock reductions
@@ -192,10 +232,14 @@ exports.updateBill = async (req, res) => {
       if (item.isCustomLineItem) {
         // Handle virtual unstructured custom entries cleanly
         const customSubTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+        
         computedTotal += customSubTotal;
+        computedProfit += customSubTotal; // ⚡ Custom items carry zero hardware cost, so they are 100% profit
+
         finalizedProcessedItems.push({
           name: item.name,
           price: Number(item.price),
+          baseRate: 0, // Explicitly set virtual base rate to 0
           discount: Number(item.discount || 0),
           orderedQuantity: Number(item.orderedQuantity),
           subTotal: customSubTotal,
@@ -215,7 +259,7 @@ exports.updateBill = async (req, res) => {
       if (item.isNewAppendItem && oldBill.purpose !== 'quotation') {
         if (product.quantity < item.orderedQuantity) {
           return res.status(400).json({ 
-            message: `Insufficient stock on store shelves to add ${product.brand} ${product.modelName}. Available: ${product.quantity}` 
+            message: `Insufficient stock on store shelves to add ${product.name}. Available: ${product.quantity}` 
           });
         }
         
@@ -228,7 +272,13 @@ exports.updateBill = async (req, res) => {
 
       // Process and compile standard schema item objects
       const itemSubTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
+      
+      // ⚡ PROFIT CALCULATION: (Selling Price - Base Cost - Applied Discount) * Qty
+      const itemBaseRate = Number(product.baseRate || 0);
+      const itemProfit = (Number(item.price) - itemBaseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
+
       computedTotal += itemSubTotal;
+      computedProfit += itemProfit; // Add line profit to global bill profit
 
       finalizedProcessedItems.push({
         productId: item.productId,
@@ -236,6 +286,7 @@ exports.updateBill = async (req, res) => {
         brand: product.brand,
         modelName: product.modelName,
         price: Number(item.price),
+        baseRate: itemBaseRate, // ⚡ Lock in the historical baseRate at time of transaction
         discount: Number(item.discount || 0),
         orderedQuantity: Number(item.orderedQuantity),
         subTotal: itemSubTotal,
@@ -245,14 +296,17 @@ exports.updateBill = async (req, res) => {
 
     // 4. Inject base labor metrics if processing repair tickets
     if (oldBill.purpose === 'repair') {
-      computedTotal += Number(serviceCharge || 0);
+      const numericServiceCharge = Number(serviceCharge || 0);
+      computedTotal += numericServiceCharge;
+      computedProfit += numericServiceCharge; // ⚡ Labor margins are strictly 100% profit markup
     }
 
     // 5. Commit calculations back into base database document properties
     oldBill.items = finalizedProcessedItems;
     oldBill.serviceCharge = oldBill.purpose === 'repair' ? Number(serviceCharge || 0) : 0;
     oldBill.totalAmount = computedTotal;
-    oldBill.isPaid= isPaid
+    oldBill.profit = computedProfit; // ⚡ Commit the final profit margin into the DB document
+    oldBill.isPaid = isPaid;
     oldBill.lastUpdated = new Date().toLocaleString();
 
     await oldBill.save();

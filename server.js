@@ -19,7 +19,7 @@ app.use('/devices', deviceRoutes);
 app.use('/billings', billingRoutes);
 
 // Database Connection (Swap with your MongoDB URI)
-const DB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/inventory';
+const DB_URI = process.env.MONGO_URI ;
 
 mongoose.connect(DB_URI)
   .then(() => console.log('✅ MongoDB Connected'))

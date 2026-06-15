@@ -4,10 +4,12 @@ const billItemSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product'},
   name: { type: String, required: true },
   price: { type: Number, required: true },
+  baseRate:{type:Number,required:false,default:0},
   discount: { type: Number, default: 0 }, // ⚡ NEW: Stores item discount value in Rupees (Rs.)
   orderedQuantity: { type: Number, required: true },
   subTotal: { type: Number, required: true },
-  isCustomLineItem: { type: Boolean, default: false }
+  isCustomLineItem: { type: Boolean, default: false },
+
 });
 
 const billSchema = new mongoose.Schema({
@@ -27,6 +29,7 @@ const billSchema = new mongoose.Schema({
     ref: 'Bill',
     default: null // ⚡ Links a return receipt back to its source purchase
   }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Bill', billSchema);
