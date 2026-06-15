@@ -19,7 +19,7 @@ const billSchema = new mongoose.Schema({
   // Conditionally used if purpose is 'repair'
   device: { type: mongoose.Schema.Types.ObjectId, ref: 'Device', required: false,default:null },
   serviceCharge: { type: Number, default: 0 },
-
+  profit: { type: Number, default: 0 ,required:false},
   items: [billItemSchema],
   totalAmount: { type: Number, required: true },
   lastUpdated: { type: String, default: () => new Date().toLocaleString() },
