@@ -30,13 +30,16 @@ exports.processReturnBill = async (req, res) => {
     }
 
     let dynamicRefundSubtotal = 0;
-    let computedProfitLoss = 0; // ⚡ NEW: Tracks the negative profit (ledger balancing)
+    let computedProfitLoss = 0; // ⚡ Tracks the negative profit (ledger balancing)
     const itemsReturnedManifest = [];
 
     // 2. Map structural array data loops for validation & price matching
     for (let returnItem of itemsToReturn) {
+      
+      // ⚡ CRITICAL FIX: Added optional chaining (?.) to prevent crashes on Custom Line Items!
+      // It will first check productId. If it's undefined (custom item), it gracefully falls back to checking the row's native _id.
       const originalItem = originalBill.items.find(
-        item => item.productId.toString() === returnItem.productId
+        item => item.productId?.toString() === returnItem.productId || item._id?.toString() === returnItem.productId
       );
 
       if (!originalItem) {
@@ -55,7 +58,7 @@ exports.processReturnBill = async (req, res) => {
       const itemDiscount = Number(originalItem.discount || 0);
       const itemBaseRate = Number(originalItem.baseRate || 0);
 
-      // ⚡ FINANCIAL FIX: Calculate refund respecting the original discount applied
+      // Calculate refund respecting the original discount applied
       const currentLineRefund = (Number(originalItem.price) - itemDiscount) * Number(returnItem.quantity);
       dynamicRefundSubtotal += currentLineRefund;
 
@@ -65,7 +68,7 @@ exports.processReturnBill = async (req, res) => {
       computedProfitLoss -= lineProfitReversal; 
 
       itemsReturnedManifest.push({
-        productId: originalItem.productId,
+        productId: originalItem.productId || undefined, // Safely pass undefined if it's a custom item
         name: originalItem.name,
         price: Number(originalItem.price),
         baseRate: itemBaseRate,   // Preserve original base rate mapping
@@ -76,7 +79,7 @@ exports.processReturnBill = async (req, res) => {
       });
 
       // 3. ⚡ INSTANT INVENTORY RESTOCK
-      // Skip stock increments if item was a virtual/custom line item
+      // Safely skip stock increments if the item was a virtual/custom line item
       if (!originalItem.isCustomLineItem && originalItem.productId) {
         await Product.findByIdAndUpdate(originalItem.productId, {
           $inc: { quantity: Number(returnItem.quantity) },
@@ -127,11 +130,15 @@ exports.createBill = async (req, res) => {
     for (let item of items) {
       if (item.isCustomLineItem) {
         item.productId = undefined; // Strips the lookup binding requirement
-        item.baseRate = 0; // ⚡ Explicitly map virtual base rate to 0
+        item.baseRate = Number(item.baseRate || 0); // ⚡ Safely parse the provided base rate from frontend
+        
         item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
         
+        // ⚡ TRUE CUSTOM ITEM PROFIT: (Selling Price - Base Cost - Applied Discount) * Qty
+        const customProfit = (Number(item.price) - item.baseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
+        
         computedTotal += item.subTotal;
-        computedProfit += item.subTotal; // ⚡ Custom components carry zero hardware cost, so they are 100% profit
+        computedProfit += customProfit; // Add accurately calculated profit
         continue; // Skips downstream Product database checks for this loop iteration
       }
 
@@ -231,15 +238,20 @@ exports.updateBill = async (req, res) => {
     for (let item of items) {
       if (item.isCustomLineItem) {
         // Handle virtual unstructured custom entries cleanly
+        item.baseRate = Number(item.baseRate || 0); // ⚡ Safely parse the provided base rate from frontend
+
         const customSubTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
         
+        // ⚡ TRUE CUSTOM ITEM PROFIT: (Selling Price - Base Cost - Applied Discount) * Qty
+        const customProfit = (Number(item.price) - item.baseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
+        
         computedTotal += customSubTotal;
-        computedProfit += customSubTotal; // ⚡ Custom items carry zero hardware cost, so they are 100% profit
+        computedProfit += customProfit; // Add accurately calculated profit
 
         finalizedProcessedItems.push({
           name: item.name,
           price: Number(item.price),
-          baseRate: 0, // Explicitly set virtual base rate to 0
+          baseRate: item.baseRate, // ⚡ Store the actual base rate
           discount: Number(item.discount || 0),
           orderedQuantity: Number(item.orderedQuantity),
           subTotal: customSubTotal,
