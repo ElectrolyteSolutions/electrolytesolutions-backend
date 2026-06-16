@@ -8,6 +8,9 @@ const customerRoutes = require('./routes/customerRoutes');
 const productRoutes = require('./routes/productRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const billingRoutes = require('./routes/billingRoutes')
+const userRoutes = require('./routes/userRoutes');
+
+// Mount routes
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -17,6 +20,7 @@ app.use('/products', productRoutes);
 app.use('/customers', customerRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/billings', billingRoutes);
+app.use('/users', userRoutes);
 
 // Database Connection (Swap with your MongoDB URI)
 const DB_URI = process.env.MONGO_URI ;
