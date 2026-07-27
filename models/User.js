@@ -30,7 +30,13 @@ const userSchema = new mongoose.Schema({
     type: String, 
     enum: ['admin', 'store', 'customer'], 
     default: 'customer' 
-  }
+  },
+  sessions: [{
+    sessionId: { type: String, required: true },
+    ipAddress: { type: String },
+    userAgent: { type: String },
+    loginAt: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 // ⚡ Encrypt password using bcrypt before saving

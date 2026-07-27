@@ -5,19 +5,24 @@ const {
   registerUser, 
   loginUser, 
   getUserProfile, 
-  getAllUsers 
+  getAllUsers,
+  getActiveSessions,
+  updateUserProfile 
 } = require('../controllers/userController');
 
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
-// Public Routes
+// ⚡ Public Routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 
-// Protected Routes (Must be logged in)
+// ⚡ Protected Routes (Must be logged in)
+// Note: Put specific sub-routes like /profile and /sessions BEFORE any generic parameters
 router.get('/profile', protect, getUserProfile);
+router.put('/profile', protect, updateUserProfile); // <--- Added route for updating profile
+router.get('/sessions', protect, getActiveSessions);
 
-// Admin Only Route (Must be logged in AND be an admin)
+// ⚡ Admin Only Route (Must be logged in AND be an admin)
 router.get('/', protect, authorizeRoles('admin'), getAllUsers);
 
 module.exports = router;
