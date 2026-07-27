@@ -61,7 +61,7 @@ exports.loginUser = async (req, res) => {
 // @access  Private
 exports.getActiveSessions = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -131,8 +131,9 @@ exports.registerUser = async (req, res) => {
 // @route   GET /api/users/profile
 // @access  Private
 exports.getUserProfile = async (req, res) => {
+  console.log(req.user)
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
