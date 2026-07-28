@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-import { v4 as uuidv4 } from 'uuid';
+const { v4: uuidv4 } = require('uuid');
 const parser = require('ua-parser-js');
 const User = require('../models/User');
 
@@ -189,5 +189,48 @@ exports.updateUserProfile = async (req, res) => {
       return res.status(400).json({ message: 'Email already in use' });
     }
     res.status(500).json({ message: 'Server error during profile update', error: error.message });
+  }
+};
+
+exports.logoutAllDevices = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Clear the sessions array entirely
+    user.sessions = [];
+    await user.save();
+
+    res.status(200).json({ message: 'Successfully logged out from all devices' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error during global logout', error: error.message });
+  }
+};
+// @desc    Terminate a specific session by sessionId
+// @route   DELETE /api/users/sessions/:sessionId
+// @access  Private
+exports.terminateSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Use $pull to remove the session matching the given sessionId from the array
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $pull: { sessions: { sessionId } } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({ 
+      message: 'Session terminated successfully',
+      sessionId 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error terminating session', error: error.message });
   }
 };

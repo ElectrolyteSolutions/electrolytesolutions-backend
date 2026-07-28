@@ -6,7 +6,9 @@ const {
   getUserProfile, 
   getAllUsers,
   getActiveSessions,
-  updateUserProfile 
+  updateUserProfile ,
+  logoutAllDevices,
+  terminateSession
 } = require('../controllers/userController');
 
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
@@ -23,5 +25,7 @@ router.get('/sessions', protect, getActiveSessions);
 
 // ⚡ Admin Only Route (Must be logged in AND be an admin)
 router.get('/', protect, authorizeRoles('admin'), getAllUsers);
-
+router.post('/logout-all', protect, logoutAllDevices);
+// Add inside your protected routes
+router.delete('/sessions/:sessionId', protect, terminateSession);
 module.exports = router;
