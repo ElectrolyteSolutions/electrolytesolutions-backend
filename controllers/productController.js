@@ -49,7 +49,6 @@ exports.getProducts = async (req, res) => {
   }
 };
 
-
 exports.createProduct = async (req, res) => {
   try {
     const newProduct = new Product(req.body);
