@@ -1,3 +1,9 @@
 node_modules/
 node_modules/
 /rought.txt
+/*.env
+**.env
+*.env/
+**.env/
+*.env
+
