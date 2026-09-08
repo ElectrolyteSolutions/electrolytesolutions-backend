@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+const androidRoutes = require('./routes/androidRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const productRoutes = require('./routes/productRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
@@ -21,6 +22,7 @@ app.use('/customers', customerRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/billings', billingRoutes);
 app.use('/users', userRoutes);
+app.use('/android', androidRoutes);
 
 // Database Connection (Swap with your MongoDB URI)
 const DB_URI = process.env.MONGO_URI ;

@@ -21,4 +21,4 @@ const deviceSchema = new mongoose.Schema({
   lastUpdated: { type: String, default: () => new Date().toLocaleString() }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Device', deviceSchema);
+module.exports = mongoose.model('device', deviceSchema);
