@@ -6,11 +6,11 @@ exports.registerAndroid = async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token is required' });
 
-    // Upsert so the same android doesn't get duplicated
+    // Upsert using returnDocument: 'after' to eliminate Mongoose warnings
     await Android.findOneAndUpdate(
       { token },
       { token, updatedAt: Date.now() },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const totalAndroids = await Android.countDocuments();
