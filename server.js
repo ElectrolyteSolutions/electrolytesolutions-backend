@@ -24,7 +24,7 @@ app.use('/billings', billingRoutes);
 app.use('/users', userRoutes);
 app.use('/android', androidRoutes);
 
-// Database Connection (Swap with your MongoDB URI)
+// Database Connection (Swap with your MongoDBf URI)
 const DB_URI = process.env.MONGO_URI ;
 
 mongoose.connect(DB_URI)
