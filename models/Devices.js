@@ -8,7 +8,7 @@ const deviceSchema = new mongoose.Schema({
   },
   deviceName: { type: String, required: true },
   issues: [{ type: String, required: true }],
-  deviceHardwareId: { type: String, required: true, unique: true ,sparse:true},
+  deviceHardwareId: { type: String, unique: true ,sparse:true},
   bills: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Bill', 
