@@ -11,7 +11,7 @@ const deviceRoutes = require('./routes/deviceRoutes');
 const billingRoutes = require('./routes/billingRoutes')
 const userRoutes = require('./routes/userRoutes');
 
-// Mount routes
+// Mount routess
 // Middleware
 app.use(cors());
 app.use(express.json());
