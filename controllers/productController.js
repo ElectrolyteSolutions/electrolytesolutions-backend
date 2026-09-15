@@ -1,4 +1,5 @@
 const Product = require('../models/Products');
+const Collection = require('../models/Collections');
 
 // Using async/await with try-catch for clean error handling
 exports.getProducts = async (req, res) => {
@@ -78,5 +79,42 @@ exports.deleteProduct = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ message: "Delete failed", error: err.message });
+  }
+};
+
+exports.getCollections = async (req, res) => {
+  try {
+    const collections = await Collection.find();
+    res.json(collections);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getProductslist = async (req, res) => {
+  try {
+    const { collectionId, search, page = 1, limit = 20 } = req.query;
+    let query = { status: 'active' };
+
+    if (collectionId) query.collections = collectionId;
+    if (search) query.$text = { $search: search };
+
+    const products = await Product.find(query)
+      .populate('collections')
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+exports.getProductBySlug = async (req, res) => {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug }).populate('collections');
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
