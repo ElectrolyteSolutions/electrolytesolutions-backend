@@ -5,10 +5,12 @@ const customerSchema = new mongoose.Schema({
     phone: { type: String, required: true },
     customerType: { type: String, enum: ['Individual', 'Corporate'], default: 'Individual' },
     address: { type: String, required: true },
-    devices: [{ 
+    devices: [{
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'Device' 
     }],
+    gst: { type: String, required: false },
+    pan: { type: String, required: false },
     lastUpdated: { type: String, default: () => new Date().toLocaleString() }
   }, 
   { timestamps: true }
