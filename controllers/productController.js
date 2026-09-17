@@ -82,12 +82,40 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
+
+// Get all collections
 exports.getCollections = async (req, res) => {
   try {
-    const collections = await Collection.find();
+    const collections = await Collection.find().sort({ title: 1 });
     res.json(collections);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create a collection (or sync from ERP)
+exports.createCollection = async (req, res) => {
+  try {
+    const { erpCollectionId, title, image, seo } = req.body;
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+    const existing = await Collection.findOne({ erpCollectionId });
+    if (existing) {
+      return res.status(400).json({ error: 'Collection already exists' });
+    }
+
+    const collection = new Collection({
+      erpCollectionId,
+      title,
+      slug,
+      image,
+      seo
+    });
+
+    await collection.save();
+    res.status(201).json(collection);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 

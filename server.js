@@ -10,7 +10,7 @@ const productRoutes = require('./routes/productRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const billingRoutes = require('./routes/billingRoutes')
 const userRoutes = require('./routes/userRoutes');
-const cartRoutes
+const cartRoutes = require('./routes/cartRoutes')
 
 // Mount routess
 // Middleware
@@ -24,9 +24,9 @@ app.use('/devices', deviceRoutes);
 app.use('/billings', billingRoutes);
 app.use('/users', userRoutes);
 app.use('/android', androidRoutes);
-app.use('/carts', cartRoutes);
-app.use('/orders', orderRoutes);
-app.use('/collections', collectionRoutes);
+// app.use('/carts', cartRoutes);
+// app.use('/orders', orderRoutes);
+// app.use('/collections', collectionRoutes);
 
 // Database Connection (Swap with your MongoDBf URId)
 const DB_URI = process.env.MONGO_URI ;

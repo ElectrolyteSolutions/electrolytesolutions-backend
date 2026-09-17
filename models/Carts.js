@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const cartSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', sparse: true },
   sessionId: { type: String }, // For guest carts

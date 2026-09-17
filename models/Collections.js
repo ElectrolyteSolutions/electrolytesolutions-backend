@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const collectionSchema = new mongoose.Schema({
   erpCollectionId: { type: String, required: true, unique: true },
   title: { type: String, required: true },
@@ -8,4 +10,5 @@ const collectionSchema = new mongoose.Schema({
     metaDescription: String
   }
 }, { timestamps: true });
+
 module.exports = mongoose.model('Collection', collectionSchema);
