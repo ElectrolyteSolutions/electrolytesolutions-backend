@@ -5,6 +5,7 @@ const billItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
   baseRate:{type:Number,required:false,default:0},
+  hsn:{type:Number,required:false},
   discount: { type: Number, default: 0 }, // ⚡ NEW: Stores item discount value in Rupees (Rs.)
   orderedQuantity: { type: Number, required: true },
   subTotal: { type: Number, required: true },
