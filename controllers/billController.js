@@ -2,6 +2,8 @@ const Bill = require('../models/Bills');
 const Customer = require('../models/Customers');
 const Device = require('../models/Devices');
 const Product = require('../models/Products');
+const { v4: uuidv4 } = require('uuid'); // Make sure you have uuid installed: npm install uuid
+const QRCode = require('qrcode');
 
 exports.getBillById = async (req, res) => {
   try {
@@ -70,6 +72,7 @@ exports.processReturnBill = async (req, res) => {
       itemsReturnedManifest.push({
         productId: originalItem.productId || undefined, // Safely pass undefined if it's a custom item
         name: originalItem.name,
+        hsn: originalItem.hsn,
         price: Number(originalItem.price),
         baseRate: itemBaseRate,   // Preserve original base rate mapping
         discount: itemDiscount,   // Preserve original discount mapping
@@ -119,27 +122,27 @@ exports.processReturnBill = async (req, res) => {
   }
 };
 
+
 exports.createBill = async (req, res) => {
   try {
     const { customer, purpose, device, serviceCharge, items, isPaid } = req.body;
 
     let computedTotal = 0;
-    let computedProfit = 0; // ⚡ NEW: Ledger variable to track true gross profit
+    let computedProfit = 0; // ⚡ Ledger variable to track true gross profit
 
     // 1. Validate Stock Levels and compute item subtotals
     for (let item of items) {
       if (item.isCustomLineItem) {
-        item.productId = undefined; // Strips the lookup binding requirement
-        item.baseRate = Number(item.baseRate || 0); // ⚡ Safely parse the provided base rate from frontend
+        item.productId = undefined; 
+        item.baseRate = Number(item.baseRate || 0); 
         
         item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
         
-        // ⚡ TRUE CUSTOM ITEM PROFIT: (Selling Price - Base Cost - Applied Discount) * Qty
         const customProfit = (Number(item.price) - item.baseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
         
         computedTotal += item.subTotal;
-        computedProfit += customProfit; // Add accurately calculated profit
-        continue; // Skips downstream Product database checks for this loop iteration
+        computedProfit += customProfit; 
+        continue; 
       }
 
       const product = await Product.findById(item.productId);
@@ -147,34 +150,38 @@ exports.createBill = async (req, res) => {
         return res.status(404).json({ message: `Product ${item.name} not found` });
       }
 
-      // Block sales if inventory is depleted (only for non-quotations)
       if (purpose !== 'quotation' && product.quantity < item.orderedQuantity) {
         return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
       }
 
       item.name = product.name;
       item.brand = product.brand;
+      item.hsn = product.hsn;
       item.modelName = product.modelName;
-      item.baseRate = Number(product.baseRate || 0); // ⚡ Lock in historical base cost at time of sale
+      item.baseRate = Number(product.baseRate || 0); 
       
       item.subTotal = (Number(item.price) - Number(item.discount || 0)) * Number(item.orderedQuantity);
       
-      // ⚡ PROFIT CALCULATION: (Selling Price - Base Cost - Applied Discount) * Qty
       const itemProfit = (Number(item.price) - item.baseRate - Number(item.discount || 0)) * Number(item.orderedQuantity);
 
       computedTotal += item.subTotal;
-      computedProfit += itemProfit; // Add line profit to global bill profit
+      computedProfit += itemProfit; 
     }
 
-    // Add labor metrics if processing repair tickets
     if (purpose === 'repair') {
       const numericServiceCharge = Number(serviceCharge || 0);
       computedTotal += numericServiceCharge;
-      computedProfit += numericServiceCharge; // ⚡ Labor margins are strictly 100% profit markup
+      computedProfit += numericServiceCharge; 
     }
+
+    // ⚡ Generate unique identifiers for the bill & QR code scan link
+    const generatedBillNumber = `INV-${Date.now().toString().slice(-8)}`;
+    const uniquePublicToken = uuidv4();
 
     // 2. Persist the Bill Data
     const newBill = new Bill({
+      billNumber: generatedBillNumber, // 👈 Fixes the schema validation error
+      publicToken: uniquePublicToken,   // 👈 Enables secure web lookup via QR code
       customer,
       purpose,
       device: purpose === 'repair' ? device : undefined,
@@ -182,7 +189,7 @@ exports.createBill = async (req, res) => {
       items,
       isPaid,
       totalAmount: computedTotal,
-      profit: computedProfit, // ⚡ Commit the final calculated profit margin into the DB document
+      profit: computedProfit, 
       lastUpdated: new Date().toLocaleString()
     });
 
@@ -200,14 +207,12 @@ exports.createBill = async (req, res) => {
       });
     }
 
-    // 5. Update Product Quantities (Skip execution if it's a quotation)
+    // 5. Update Product Quantities
     if (purpose !== 'quotation') {
       for (let item of items) {
-        // We ensure we skip custom line items here as they don't have a valid productId
         if(!item.isCustomLineItem){
             await Product.findByIdAndUpdate(item.productId, {
-              $inc: { quantity: -item.orderedQuantity },
-              $set: { lastUpdated: new Date().toLocaleString() }
+              $inc: { quantity: -item.orderedQuantity },$set: { lastUpdated: new Date().toLocaleString() }
             });
         }
       }
@@ -250,6 +255,7 @@ exports.updateBill = async (req, res) => {
 
         finalizedProcessedItems.push({
           name: item.name,
+          hsn: item.hsn,
           price: Number(item.price),
           baseRate: item.baseRate, // ⚡ Store the actual base rate
           discount: Number(item.discount || 0),
@@ -295,6 +301,7 @@ exports.updateBill = async (req, res) => {
       finalizedProcessedItems.push({
         productId: item.productId,
         name: product.name,
+        hsn: product.hsn,
         brand: product.brand,
         modelName: product.modelName,
         price: Number(item.price),
@@ -361,3 +368,34 @@ exports.deleteBill = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+ exports.getPublicBill =async (req, res) => {
+  try {
+    const bill = await Bill.findOne({ publicToken: req.params.token })
+      .populate('customer') // Optional: populate customer details if needed
+      .populate('device');  // Optional: populate device details if needed
+
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found or link has expired.' });
+    }
+
+    // 1. Define the live web URL the QR code will open
+    const webViewUrl = `https://shop.electrolytesolutions.in/bills/${bill.publicToken}`;
+
+    // 2. Generate the QR code as a Base64 image
+    const qrCodeDataUrl = await QRCode.toDataURL(webViewUrl, {
+      errorCorrectionLevel: 'M',
+      width: 250,
+      margin: 1
+    });
+
+    // 3. Return both the bill data and the QR image
+    res.status(200).json({
+      success: true,
+      bill,
+      qrCode: qrCodeDataUrl // 👈 You can use this directly in an <img> tag on your invoice print view!
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+}; 
