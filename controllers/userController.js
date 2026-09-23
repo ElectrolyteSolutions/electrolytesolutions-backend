@@ -131,7 +131,6 @@ exports.registerUser = async (req, res) => {
 // @route   GET /api/users/profile
 // @access  Private
 exports.getUserProfile = async (req, res) => {
-  console.log(req.user)
   try {
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -158,22 +157,32 @@ exports.getAllUsers = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     // ⚡ Find strictly by req.user._id (from auth middleware)
-    const user = await User.findById(req.user._id);
+    let user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update fields in-place
+    // Update standard fields in-place
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
     user.phone = req.body.phone !== undefined ? req.body.phone : user.phone;
     user.address = req.body.address !== undefined ? req.body.address : user.address;
+    
+    // Update new business & banking fields in-place
+    user.gst = req.body.gst !== undefined ? req.body.gst : user.gst;
+    user.pan = req.body.pan !== undefined ? req.body.pan : user.pan;
+    user.udyam = req.body.udyam !== undefined ? req.body.udyam : user.udyam;
+    user.contactemail = req.body.contactemail !== undefined ? req.body.contactemail : user.contactemail;
+    user.bankaccountnumber = req.body.bankaccountnumber !== undefined ? req.body.bankaccountnumber : user.bankaccountnumber;
+    user.bankifsc = req.body.bankifsc !== undefined ? req.body.bankifsc : user.bankifsc;
+    user.bankname = req.body.bankname !== undefined ? req.body.bankname : user.bankname;
+    user.upi = req.body.upi !== undefined ? req.body.upi : user.upi;
 
     if (req.body.password) {
       user.password = req.body.password; // Triggers pre-save hash hook safely
     }
-
+    
     const updatedUser = await user.save(); // Preserves original _id
 
     res.status(200).json({
@@ -182,7 +191,15 @@ exports.updateUserProfile = async (req, res) => {
       email: updatedUser.email,
       role: updatedUser.role,
       phone: updatedUser.phone,
-      address: updatedUser.address
+      address: updatedUser.address,
+      gst: updatedUser.gst,
+      pan: updatedUser.pan,
+      udyam: updatedUser.udyam,
+      contactemail: updatedUser.contactemail,
+      bankaccountnumber: updatedUser.bankaccountnumber,
+      bankifsc: updatedUser.bankifsc,
+      bankname: updatedUser.bankname,
+      upi: updatedUser.upi
     });
   } catch (error) {
     if (error.code === 11000) {

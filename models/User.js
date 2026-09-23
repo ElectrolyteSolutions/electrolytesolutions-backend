@@ -6,6 +6,14 @@ const userSchema = new mongoose.Schema({
     type: String, 
     required: [true, 'Please add a name'] 
   },
+  gst:{type:String, required:false},
+  pan:{type:String, required:false},
+  udyam:{type:String, required:false},
+  contactemail:{type:String, required:false},
+  bankaccountnumber:{type:String, required:false},
+  bankifsc:{type:String, required:false},
+  bankname:{type:String, required:false},
+  upi:{type:String, required:false},
   email: { 
     type: String, 
     required: [true, 'Please add an email'], 
