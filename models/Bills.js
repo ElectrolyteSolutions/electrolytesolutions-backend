@@ -15,8 +15,16 @@ const billItemSchema = new mongoose.Schema({
 });
 
 const billSchema = new mongoose.Schema({
-  billNumber: { type: String, required: true },
-  publicToken: { type: String, default: uuidv4, unique: true },
+  billNumber: { 
+    type: String, 
+    required: true, 
+    default: () => `INV-${Date.now().toString().slice(-8)}` 
+  },
+  publicToken: { 
+    type: String, 
+    required: true, 
+    default: uuidv4 
+  },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   purpose: { type: String, enum: ['purchase', 'repair', 'quotation','return'], required: true },
   
@@ -28,7 +36,6 @@ const billSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   lastUpdated: { type: String, default: () => new Date().toLocaleString() },
   isPaid : { type:Boolean , default:true},
-
   originalInvoiceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Bill',
@@ -36,5 +43,7 @@ const billSchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
+
+
 
 module.exports = mongoose.model('Bill', billSchema);
