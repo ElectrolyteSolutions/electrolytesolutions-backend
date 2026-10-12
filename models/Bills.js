@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
+const { v4: uuidv4 } = require('uuid');
 
 const billItemSchema = new mongoose.Schema({
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product'},
   name: { type: String, required: true },
   price: { type: Number, required: true },
   baseRate:{type:Number,required:false,default:0},
+  hsn:{type:Number,required:false},
   discount: { type: Number, default: 0 }, // ⚡ NEW: Stores item discount value in Rupees (Rs.)
   orderedQuantity: { type: Number, required: true },
   subTotal: { type: Number, required: true },
@@ -13,6 +15,16 @@ const billItemSchema = new mongoose.Schema({
 });
 
 const billSchema = new mongoose.Schema({
+  billNumber: { 
+    type: String, 
+    required: true, 
+    default: () => `INV-${Date.now().toString().slice(-8)}` 
+  },
+  publicToken: { 
+    type: String, 
+    required: true, 
+    default: uuidv4 
+  },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   purpose: { type: String, enum: ['purchase', 'repair', 'quotation','return'], required: true },
   
@@ -31,5 +43,7 @@ const billSchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
+
+
 
 module.exports = mongoose.model('Bill', billSchema);

@@ -18,6 +18,7 @@ const deviceSchema = new mongoose.Schema({
     enum: ['in-progress', 'resolved', 'rejected'], 
     default: 'in-progress' 
   },
+  deviceType:{type:String,required:true},
   lastUpdated: { type: String, default: () => new Date().toLocaleString() }
 }, { timestamps: true });
 

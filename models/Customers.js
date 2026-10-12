@@ -20,11 +20,13 @@ const customerSchema = new mongoose.Schema({
     name: { type: String},
     phone: { type: String},
     customerType: { type: String, enum: ['Individual', 'Corporate'], default: 'Individual' },
-    address: { type: String},
-    devices: [{ 
+    address: { type: String, required: true },
+    devices: [{
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'Device' 
     }],
+    gst: { type: String, required: false },
+    pan: { type: String, required: false },
     lastUpdated: { type: String, default: () => new Date().toLocaleString() }
   }, 
   { timestamps: true }

@@ -26,6 +26,7 @@ const productSchema = new mongoose.Schema({
   orignalPrice: { type: Number},
   quantity: { type: Number, required: true },
   baseRate:{ type: Number, required: true },
+  hsn:{type:Number,required:false},
   lastUpdated: { type: String, default: () => new Date().toLocaleString() }
 }, { timestamps: true });
 
