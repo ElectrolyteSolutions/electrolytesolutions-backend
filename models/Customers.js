@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const customerSchema = new mongoose.Schema({
-    email: { type: String, required: true, unique: true, lowercase: true },
+    email: { type: String, unique: true, lowercase: true },
     password: { type: String }, // Optional if using Google OAuth exclusively
     firstName: { type: String},
     lastName: { type: String},
