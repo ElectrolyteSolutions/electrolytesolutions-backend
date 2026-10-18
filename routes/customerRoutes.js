@@ -9,7 +9,6 @@ router.post('/login', customerController.loginCustomer);
 router.post('/google', customerController.googleOAuth);
 router.get('/profile', verifyToken, customerController.getProfile);
 
-
 router.get('/',protect,authorizeRoles('admin'), customerController.getCustomers);
 router.post('/',protect,authorizeRoles('admin'), customerController.createCustomer);
 router.put('/:id',protect,authorizeRoles('admin'), customerController.updateCustomer);

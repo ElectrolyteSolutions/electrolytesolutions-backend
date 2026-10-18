@@ -8,7 +8,11 @@
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^7.2.0",
     "mongoose": "^9.10.1",
+    "qrcode": "^1.5.4",
     "ua-parser-js": "^2.0.10",
     "uuid": "^14.0.2"
+  },
+  "scripts": {
+    "start": "npx nodemon server.js"
   }
 }

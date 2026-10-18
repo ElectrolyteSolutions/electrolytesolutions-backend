@@ -4,7 +4,7 @@ const Collection = require('../models/Collections');
 // Using async/await with try-catch for clean error handling
 exports.getProducts = async (req, res) => {
   try {
-    const { alert, search, sortBy, sortOrder, brand, modelName } = req.query;
+    const { alert, search, sortBy, sortOrder, brand, type, collectionId } = req.query;
     let filterCondition = {};
 
     // 1. Existing Alert Filter Configuration
@@ -21,28 +21,32 @@ exports.getProducts = async (req, res) => {
     if (brand && brand.trim() !== '') {
       filterCondition.brand = { $regex: brand.trim(), $options: 'i' };
     }
-    
-    if (modelName && modelName.trim() !== '') {
-      filterCondition.modelName = { $regex: modelName.trim(), $options: 'i' };
+
+    if (type && type.trim() !== '') {
+      filterCondition.type = type.trim();
+    }
+
+    if (collectionId && collectionId.trim() !== '') {
+      filterCondition.collections = collectionId.trim();
     }
 
     // 4. Multi-Criteria Sorting Engine Dictionary Mapping Matrix
     let sortExecutionObject = { createdAt: -1 }; // Default fallback orientation configuration key
 
     if (sortBy) {
-      // Maps client shorthand keys directly to backend DB collection field tokens
       let targetSortField = sortBy;
       if (sortBy === 'qty') targetSortField = 'quantity';
       if (sortBy === 'price') targetSortField = 'price';
       if (sortBy === 'name') targetSortField = 'name';
 
-      // Evaluate asc/desc values (Defaulting to ascending 1 if parameters drop)
       const executionDirection = sortOrder === 'desc' ? -1 : 1;
       sortExecutionObject = { [targetSortField]: executionDirection };
     }
 
-    // Execute aggregated Mongo queries matrix pipelines
-    const products = await Product.find(filterCondition).sort(sortExecutionObject);
+    // Execute aggregated Mongo queries matrix pipelines with collection population
+    const products = await Product.find(filterCondition)
+      .populate('collections', 'title slug')
+      .sort(sortExecutionObject);
     
     res.status(200).json(products);
   } catch (err) {
@@ -82,7 +86,6 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-
 // Get all collections
 exports.getCollections = async (req, res) => {
   try {
@@ -93,7 +96,34 @@ exports.getCollections = async (req, res) => {
   }
 };
 
-// Create a collection (or sync from ERP)
+// Get distinct product types for mobile filtering
+exports.getTypes = async (req, res) => {
+  try {
+    const typesWithProducts = await Product.aggregate([
+      { $match: { status: 'active' } }, // Only active products
+      {
+        $group: {
+          _id: '$type', // Group by the 'type' field
+          products: { $push: '$$ROOT' } // Push the full product documents into an array
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          type: '$_id',
+          products: 1
+        }
+      },
+      { $sort: { type: 1 } } // Sort types alphabetically
+    ]);
+
+    res.json(typesWithProducts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create a collection
 exports.createCollection = async (req, res) => {
   try {
     const { erpCollectionId, title, image, seo } = req.body;
@@ -119,24 +149,30 @@ exports.createCollection = async (req, res) => {
   }
 };
 
+// Public customer app products list supporting collection, type, and search filters
 exports.getProductslist = async (req, res) => {
   try {
-    const { collectionId, search, page = 1, limit = 20 } = req.query;
+    const { collectionId, type, search, page = 1, limit = 20 } = req.query;
     let query = { status: 'active' };
 
     if (collectionId) query.collections = collectionId;
-    if (search) query.$text = { $search: search };
+    if (type) query.type = type;
+    if (search && search.trim() !== '') {
+      query.name = { $regex: search.trim(), $options: 'i' };
+    }
 
     const products = await Product.find(query)
-      .populate('collections')
+      .populate('collections', 'title slug')
       .skip((page - 1) * limit)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .sort({ createdAt: -1 });
 
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
 exports.getProductBySlug = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug }).populate('collections');
