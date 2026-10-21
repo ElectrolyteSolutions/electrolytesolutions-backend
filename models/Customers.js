@@ -18,9 +18,8 @@ const customerSchema = new mongoose.Schema({
     }],
     phone: { type: String },
     name: { type: String},
-    phone: { type: String},
     customerType: { type: String, enum: ['Individual', 'Corporate'], default: 'Individual' },
-    address: { type: String, required: true },
+    address: { type: String },
     devices: [{
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'Device' 
