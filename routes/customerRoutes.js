@@ -8,6 +8,7 @@ router.post('/register', customerController.registerCustomer);
 router.post('/login', customerController.loginCustomer);
 router.post('/google', customerController.googleOAuth);
 router.get('/profile', verifyToken, customerController.getProfile);
+router.put('/profile', verifyToken, customerController.updateCustomer);
 
 router.get('/',protect,authorizeRoles('admin'), customerController.getCustomers);
 router.post('/',protect,authorizeRoles('admin'), customerController.createCustomer);

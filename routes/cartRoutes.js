@@ -1,15 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { 
-  createCart, 
-  getCart, 
+  getOrCreateCart, 
   addToCart, 
   updateCartItem, 
   removeCartItem 
 } = require('../controllers/cartController');
 
-router.post('/create', createCart);
-router.get('/:cartId', getCart);
+router.get('/', getOrCreateCart); // Pass ?customerId=... or ?cartId=...
 router.post('/add', addToCart);
 router.put('/update', updateCartItem);
 router.post('/remove', removeCartItem);

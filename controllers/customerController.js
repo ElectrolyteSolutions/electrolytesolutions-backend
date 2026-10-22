@@ -134,7 +134,7 @@ exports.googleOAuth = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     // req.user.id comes from the verifyToken middleware above
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await Customer.findById(req.user.id).select('-password');
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
