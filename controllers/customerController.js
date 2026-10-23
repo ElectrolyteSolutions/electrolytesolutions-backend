@@ -4,12 +4,11 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-
 exports.getCustomers = async (req, res) => {
   try {
-    // .populate('devices') replaces the IDs in the devices array with actual device data
     const customers = await Customer.find()
-      .populate('devices') 
+      .populate('devices')
+      .populate('orders')
       .sort({ createdAt: -1 });
 
     res.status(200).json(customers);
@@ -36,23 +35,19 @@ exports.updateCustomer = async (req, res) => {
       req.params.id, 
       { ...req.body, lastUpdated: new Date().toLocaleString() }, 
       { new: true }
-    );
+    ).populate('orders');
     res.json(updated);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 };
 
-
 exports.updateProfile = async (req, res) => {
-  // Fallback to req.user.id from auth middleware if req.params.id isn't provided
   const customerId = req.params.id || req.user?.id;
 
-  console.log("Update request received for customer ID:", customerId);
-  console.log("Request body:", req.body);
+  console.log("Update profile request for customer ID:", customerId);
 
   try {
-    // Prevent updating sensitive fields like password or email directly through this route unless intended
     const { firstName, lastName, phone, address, addresses, customerType, gst, pan } = req.body;
     
     const updateData = {
@@ -71,7 +66,7 @@ exports.updateProfile = async (req, res) => {
       customerId, 
       updateData, 
       { new: true, runValidators: true }
-    ).select('-password'); // Exclude password from the returned object
+    ).select('-password').populate('orders');
 
     if (!updated) {
       return res.status(404).json({ message: "Customer not found" });
@@ -80,7 +75,8 @@ exports.updateProfile = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      customer: updated
+      customer: updated,
+      user: updated // Support both formats depending on slice expectations
     });
   } catch (err) {
     console.error("Error updating customer profile:", err.message);
@@ -101,12 +97,10 @@ exports.registerCustomer = async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;
     
-    // Log incoming request body for debugging
     console.log("Registration attempt received for:", email);
 
     const existingUser = await Customer.findOne({ email });
     if (existingUser) {
-      console.warn("Registration failed: Email already registered ->", email);
       return res.status(400).json({ error: 'Email already registered' });
     }
 
@@ -121,16 +115,13 @@ exports.registerCustomer = async (req, res) => {
     });
 
     await customer.save();
-    console.log("Customer successfully registered and saved to MongoDB:", customer._id);
+    const populatedCustomer = await Customer.findById(customer._id).select('-password').populate('orders');
 
     const token = jwt.sign({ id: customer._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     
-    res.status(201).json({ token, customer });
+    res.status(201).json({ token, customer: populatedCustomer, user: populatedCustomer });
   } catch (err) {
-    // Detailed error logging in backend console
     console.error("CRITICAL ERROR in registerCustomer:", err.message);
-    console.error(err.stack);
-    
     res.status(500).json({ error: err.message || 'Internal server error during registration' });
   }
 };
@@ -138,14 +129,17 @@ exports.registerCustomer = async (req, res) => {
 exports.loginCustomer = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const customer = await Customer.findOne({ email });
+    const customer = await Customer.findOne({ email }).populate('orders');
     if (!customer || !customer.password) return res.status(400).json({ error: 'Invalid credentials' });
 
     const isMatch = await bcrypt.compare(password, customer.password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign({ id: customer._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, customer });
+    const customerObj = customer.toObject();
+    delete customerObj.password;
+
+    res.json({ token, customer: customerObj, user: customerObj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -157,7 +151,7 @@ exports.googleOAuth = async (req, res) => {
     const ticket = await client.verifyIdToken({ idToken, audience: process.env.GOOGLE_CLIENT_ID });
     const { email, given_name, family_name, sub: googleId } = ticket.getPayload();
 
-    let customer = await Customer.findOne({ email });
+    let customer = await Customer.findOne({ email }).populate('orders');
     if (!customer) {
       customer = await Customer.create({
         email,
@@ -166,13 +160,17 @@ exports.googleOAuth = async (req, res) => {
         googleId,
         authProvider: 'google'
       });
+      customer = await Customer.findById(customer._id).populate('orders');
     } else if (!customer.googleId) {
       customer.googleId = googleId;
       await customer.save();
     }
 
     const token = jwt.sign({ id: customer._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, customer });
+    const customerObj = customer.toObject();
+    delete customerObj.password;
+
+    res.json({ token, customer: customerObj, user: customerObj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -180,69 +178,65 @@ exports.googleOAuth = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    // req.user.id comes from the verifyToken middleware above
-    const user = await Customer.findById(req.user.id).select('-password');
+    const user = await Customer.findById(req.user.id).select('-password').populate('orders');
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ user });
+    res.json({ user, customer: user });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-// Add a new address to customer's addresses array
+
 exports.addAddress = async (req, res) => {
   try {
     const customerId = req.user?.id;
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findById(customerId).select('-password').populate('orders');
     if (!customer) return res.status(404).json({ message: "Customer not found" });
 
     customer.addresses.push(req.body);
     await customer.save();
 
-    res.status(200).json({ success: true, message: "Address added successfully", customer });
+    res.status(200).json({ success: true, message: "Address added successfully", customer, user: customer });
   } catch (err) {
     res.status(400).json({ message: "Failed to add address", error: err.message });
   }
 };
 
-// Update an existing address by its sub-document ID
 exports.updateAddress = async (req, res) => {
   try {
     const customerId = req.user?.id;
     const addressId = req.params.addressId;
 
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findById(customerId).select('-password').populate('orders');
     if (!customer) return res.status(404).json({ message: "Customer not found" });
 
     const addressItem = customer.addresses.id(addressId);
     if (!addressItem) return res.status(404).json({ message: "Address not found" });
 
-    // Update fields
     Object.assign(addressItem, req.body);
     await customer.save();
 
-    res.status(200).json({ success: true, message: "Address updated successfully", customer });
+    res.status(200).json({ success: true, message: "Address updated successfully", customer, user: customer });
   } catch (err) {
     res.status(400).json({ message: "Failed to update address", error: err.message });
   }
 };
 
-// Delete an address by its sub-document ID
 exports.deleteAddress = async (req, res) => {
   try {
     const customerId = req.user?.id;
     const addressId = req.params.addressId;
 
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findById(customerId).select('-password').populate('orders');
     if (!customer) return res.status(404).json({ message: "Customer not found" });
 
     customer.addresses.id(addressId).deleteOne();
     await customer.save();
 
-    res.status(200).json({ success: true, message: "Address deleted successfully", customer });
+    res.status(200).json({ success: true, message: "Address deleted successfully", customer, user: customer });
   } catch (err) {
     res.status(400).json({ message: "Failed to delete address", error: err.message });
   }

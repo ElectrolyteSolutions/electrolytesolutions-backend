@@ -24,6 +24,10 @@ const customerSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'Device' 
     }],
+    orders: [{
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Order' 
+    }],
     gst: { type: String, required: false },
     pan: { type: String, required: false },
     lastUpdated: { type: String, default: () => new Date().toLocaleString() }
