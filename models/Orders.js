@@ -1,24 +1,30 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-  orderNumber: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-  lineItems: [{
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    variantSku: String,
-    quantity: Number,
-    price: Number
+  orderNumber: { type: String, required: true, unique: true },
+  items: [{
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    quantity: { type: Number, required: true },
+    price: { type: Number, required: true }
   }],
-  pricing: {
-    subtotal: Number,
-    tax: Number,
-    shipping: Number,
-    total: Number
+  totalAmount: { type: Number, required: true },
+  shippingAddress: {
+    address1: String,
+    address2: String,
+    city: String,
+    province: String,
+    country: String,
+    zip: String
   },
-  shippingAddress: Object,
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
-  fulfillmentStatus: { type: String, enum: ['unfulfilled', 'fulfilled', 'cancelled'], default: 'unfulfilled' },
-  erpOrderId: { type: String } // Reference ID returned by your ERP upon successful sync
+  paymentInfo: {
+    razorpayOrderId: String,
+    razorpayPaymentId: String,
+    razorpaySignature: String,
+    status: { type: String, enum: ['Pending', 'Paid', 'Failed'], default: 'Pending' }
+  },
+  financialStatus: { type: String, default: 'Paid' },
+  fulfillmentStatus: { type: String, default: 'Unfulfilled' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', orderSchema);
