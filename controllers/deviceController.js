@@ -39,6 +39,35 @@ exports.getDevicesByCustomer = async (req, res) => {
   }
 };
 
+exports.getDevicesByType = async (req, res) => {
+  try {
+    const pipeline = [
+      {
+        $group: {
+          _id: "$deviceType",
+          devices: { $push: "$$ROOT" },
+          count: { $sum: 1 }
+        }
+      },
+      // 3. Project/reshape the data to match your exact format
+      {
+        $project: {
+          _id: 0,
+          type: "$_id",
+          devices: 1,
+          count: 1
+        }
+      }
+    ];
+
+    const result = await Device.aggregate(pipeline);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
 // UPDATE: Update repair status or hardware details
 exports.updateDevice = async (req, res) => {
   try {

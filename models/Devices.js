@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
 const deviceSchema = new mongoose.Schema({
+  deviceName: { type: String, required: true },
+  deviceHardwareId: { type: String, unique: true ,sparse:true},
   owner: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Customer', 
     required: true 
   },
-  deviceName: { type: String, required: true },
   issues: [{ type: String, required: true }],
-  deviceHardwareId: { type: String, unique: true ,sparse:true},
   bills: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Bill', 
