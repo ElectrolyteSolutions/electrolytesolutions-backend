@@ -3,7 +3,14 @@ const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema({
   erpProductId: { type: String, required: true, unique: true },
   slug: { type: String, required: false, unique: true },
-  description: { type: String ,required:true},
+  description: { 
+    type: String, 
+    required: true 
+  },
+  details: [{
+    title: { type: String, required: true },
+    content: { type: String, required: true }
+  }],
   collections: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Collection', index: true ,required:true}],
   variants: [{
     erpVariantId: { type: String, required: true },
