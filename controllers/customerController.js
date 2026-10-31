@@ -76,7 +76,7 @@ exports.updateProfile = async (req, res) => {
       success: true,
       message: "Profile updated successfully",
       customer: updated,
-      user: updated // Support both formats depending on slice expectations
+      user: updated 
     });
   } catch (err) {
     console.error("Error updating customer profile:", err.message);
@@ -90,6 +90,21 @@ exports.deleteCustomer = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+exports.checkEmailAvailability = async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: "Email query parameter is required" });
+    }
+    const existingUser = await Customer.findOne({ email: email.toLowerCase().trim() });
+    res.status(200).json({
+      available: !existingUser,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Error checking email availability", error: err.message });
   }
 };
 

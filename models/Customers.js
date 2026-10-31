@@ -1,10 +1,13 @@
 const mongoose = require('mongoose');
 
 const customerSchema = new mongoose.Schema({
-    email: { type: String, unique: true, lowercase: true },
-    password: { type: String }, // Optional if using Google OAuth exclusively
     firstName: { type: String},
     lastName: { type: String},
+    phone: { type: String },
+    name: { type: String},
+    customerType: { type: String, enum: ['Individual', 'Corporate'], default: 'Individual' },
+    email: { type: String, unique: true, lowercase: true },
+    password: { type: String }, // Optional if using Google OAuth exclusively
     googleId: { type: String, unique: true, sparse: true },
     authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
     addresses: [{
@@ -16,9 +19,6 @@ const customerSchema = new mongoose.Schema({
       zip: String,
       isDefault: Boolean
     }],
-    phone: { type: String },
-    name: { type: String},
-    customerType: { type: String, enum: ['Individual', 'Corporate'], default: 'Individual' },
     address: { type: String },
     devices: [{
       type: mongoose.Schema.Types.ObjectId, 

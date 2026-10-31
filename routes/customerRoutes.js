@@ -13,6 +13,7 @@ router.put('/profile', verifyToken, customerController.updateProfile);
 router.post('/address', verifyToken, customerController.addAddress);
 router.put('/address/:addressId', verifyToken, customerController.updateAddress);
 router.delete('/address/:addressId', verifyToken, customerController.deleteAddress);
+router.get('/check-email-availability', customerController.checkEmailAvailability);
 
 router.get('/',protect,authorizeRoles('admin'), customerController.getCustomers);
 router.post('/',protect,authorizeRoles('admin'), customerController.createCustomer);
