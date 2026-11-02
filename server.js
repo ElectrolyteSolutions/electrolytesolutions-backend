@@ -13,6 +13,7 @@ const billingRoutes = require('./routes/billingRoutes');
 const userRoutes = require('./routes/userRoutes');
 const cartRoutes = require('./routes/cartRoutes')
 const orderRoutes = require('./routes/orderRoutes')
+const collectionRoutes = require('./routes/collectionRoutes')
 
 // Mount routess
 // Middleware
@@ -42,7 +43,7 @@ app.use('/users', userRoutes);
 app.use('/android', androidRoutes);
 app.use('/carts', cartRoutes);
 app.use('/orders', orderRoutes) ;
-// app.use('/collections', collectionRoutes);
+app.use('/collections', collectionRoutes);
 
 // Local development server listener
 if (process.env.NODE_ENV !== 'production') {
