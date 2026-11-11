@@ -149,8 +149,9 @@ exports.createCollection = async (req, res) => {
   }
 };
 
-// Public customer app products list supporting collection, type, and search filters
 exports.getProductslist = async (req, res) => {
+  console.log("PRODUCT LIST REQ",req.query)
+  // console.log("PRODUCT LIST RES",res)
   try {
     const { collectionId, type, search, page = 1, limit = 20 } = req.query;
     let query = { status: 'active' };
