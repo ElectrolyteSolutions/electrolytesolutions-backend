@@ -1,5 +1,6 @@
 const Product = require('../models/Products');
 const Collection = require('../models/Collections');
+const Cart = require('../models/Carts');
 
 // Using async/await with try-catch for clean error handling
 exports.getProducts = async (req, res) => {
@@ -150,10 +151,10 @@ exports.createCollection = async (req, res) => {
 };
 
 exports.getProductslist = async (req, res) => {
-  console.log("PRODUCT LIST REQ",req.query)
-  // console.log("PRODUCT LIST RES",res)
+  console.log("PRODUCT LIST RETRIEVED");
   try {
-    const { collectionId, type, search, page = 1, limit = 20 } = req.query;
+    const { collectionId, type, search, page = 1, limit = 20 ,id} = req.query;
+    console.log("USERd",id)
     let query = { status: 'active' };
 
     if (collectionId) query.collections = collectionId;
@@ -166,9 +167,31 @@ exports.getProductslist = async (req, res) => {
       .populate('collections', 'title slug')
       .skip((page - 1) * limit)
       .limit(Number(limit))
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean(); // Use .lean() so we can attach custom flags to plain JavaScript objects
 
-    res.json(products);
+    // Fetch the user's active cart if authenticated
+    let cartProductIds = new Set();
+
+    if (id) {
+      const cart = await Cart.findOne({ customerId: id }).lean();
+      console.log("CART",cart)
+      
+      if (cart && cart.items) {
+        // Map cart items to a Set of product IDs for O(1) lookup speed
+        cartProductIds = new Set(cart.items.map(items => items.productId.toString()));
+      }
+    }
+
+    // Attach the isAddedInCart flag to each product
+    const productsWithCartFlag = products.map(product => ({
+      ...product,
+      isAddedInCart: cartProductIds.has(product._id.toString())
+    }));
+
+
+    res.json(productsWithCartFlag);
+    // console.log(productsWithCartFlag)
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

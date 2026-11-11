@@ -22,7 +22,7 @@ const calculateShipping = (shippingAddress, subtotal) => {
 
   // Balrampur, UP, 271201 (Lightning Delivery)
   if (zip === '271201' || city.includes('balrampur')) {
-    cost = 39;
+    cost = 0;
     method = 'Lightning City Delivery (Balrampur - 29 mins)';
   } 
   // Within Uttar Pradesh
