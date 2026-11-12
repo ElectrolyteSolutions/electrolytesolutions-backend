@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Order = require('../models/Orders');
 const Cart = require('../models/Carts');
 const Customer = require('../models/Customers');
+const Product = require('../models/Products'); // Ensure Product model is imported
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -20,23 +21,17 @@ const calculateShipping = (shippingAddress, subtotal) => {
   let cost = 79;
   let method = 'State Standard Shipping (UP)';
 
-  // Balrampur, UP, 271201 (Lightning Delivery)
   if (zip === '271201' || city.includes('balrampur')) {
     cost = 0;
     method = 'Lightning City Delivery (Balrampur - 29 mins)';
-  } 
-  // Within Uttar Pradesh
-  else if (province.includes('uttar pradesh') || province === 'up') {
+  } else if (province.includes('uttar pradesh') || province === 'up') {
     cost = 79;
     method = 'State Standard Shipping (UP - 3-5 days)';
-  } 
-  // Outside UP (National)
-  else {
+  } else {
     cost = 129;
     method = 'National Express Shipping (Outside UP - 5-9 days)';
   }
 
-  // Free shipping relaxation above ₹2000 order amount
   if (subtotal > 2000) {
     cost = 0;
   }
@@ -44,18 +39,48 @@ const calculateShipping = (shippingAddress, subtotal) => {
   return { cost, method };
 };
 
-// Step 1: Initialize Razorpay Order (with dynamic shipping)
+// Helper to resolve order items & subtotal whether Direct Buy or Cart
+const resolveOrderItemsAndSubtotal = async (body) => {
+  let orderItems = [];
+  let subtotal = 0;
+
+  if (body.productId && body.quantity) {
+    // Direct Buy payload
+    const product = await Product.findById(body.productId);
+    if (!product) throw new Error('Direct buy product not found');
+    
+    const itemPrice = product.price || 0;
+    orderItems = [{
+      productId: product._id,
+      quantity: Number(body.quantity),
+      price: itemPrice
+    }];
+    subtotal = itemPrice * Number(body.quantity);
+  } else {
+    // Cart payload fallback
+    const cart = await Cart.findOne({ customerId: body.customerId }).populate('items.productId');
+    if (!cart || !cart.items || cart.items.length === 0) {
+      throw new Error('Cart is empty and no direct product specified');
+    }
+    orderItems = cart.items.map(item => ({
+      productId: item.productId._id || item.productId,
+      quantity: item.quantity,
+      price: item.productId.price || item.price
+    }));
+    subtotal = cart.subtotal;
+  }
+
+  return { orderItems, subtotal };
+};
+
+// Step 1: Initialize Razorpay Order (supports Direct Buy & Cart)
 exports.createRazorpayOrder = async (req, res) => {
   try {
-    const { customerId, shippingAddress } = req.body;
+    const { customerId, shippingAddress, productId, quantity } = req.body;
 
-    const cart = await Cart.findOne({ customerId }).populate('items.productId');
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ error: 'Cart is empty' });
-    }
-
-    const shippingInfo = calculateShipping(shippingAddress, cart.subtotal);
-    const finalTotalAmount = cart.subtotal + shippingInfo.cost;
+    const { orderItems, subtotal } = await resolveOrderItemsAndSubtotal({ customerId, productId, quantity });
+    const shippingInfo = calculateShipping(shippingAddress, subtotal);
+    const finalTotalAmount = subtotal + shippingInfo.cost;
     const amountInPaise = Math.round(finalTotalAmount * 100);
 
     const options = {
@@ -70,7 +95,7 @@ exports.createRazorpayOrder = async (req, res) => {
       razorpayOrderId: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
-      subtotal: cart.subtotal,
+      subtotal,
       shippingCost: shippingInfo.cost,
       shippingMethod: shippingInfo.method,
       totalAmount: finalTotalAmount
@@ -90,7 +115,9 @@ exports.verifyAndCreateOrder = async (req, res) => {
       shippingMethod,
       razorpayOrderId, 
       razorpayPaymentId, 
-      razorpaySignature 
+      razorpaySignature,
+      productId,
+      quantity
     } = req.body;
 
     const body = razorpayOrderId + "|" + razorpayPaymentId;
@@ -103,18 +130,16 @@ exports.verifyAndCreateOrder = async (req, res) => {
       return res.status(400).json({ error: 'Invalid payment signature' });
     }
 
-    const cart = await Cart.findOne({ customerId });
-    if (!cart) return res.status(404).json({ error: 'Cart not found' });
-
-    const shippingInfo = shippingCost !== undefined ? { cost: shippingCost, method: shippingMethod } : calculateShipping(shippingAddress, cart.subtotal);
-    const finalTotalAmount = cart.subtotal + shippingInfo.cost;
+    const { orderItems, subtotal } = await resolveOrderItemsAndSubtotal({ customerId, productId, quantity });
+    const shippingInfo = shippingCost !== undefined ? { cost: shippingCost, method: shippingMethod } : calculateShipping(shippingAddress, subtotal);
+    const finalTotalAmount = subtotal + shippingInfo.cost;
     const orderNumber = `ES-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const newOrder = new Order({
       customerId,
       orderNumber,
-      items: cart.items,
-      subtotal: cart.subtotal,
+      items: orderItems,
+      subtotal,
       shippingCost: shippingInfo.cost,
       shippingMethod: shippingInfo.method,
       totalAmount: finalTotalAmount,
@@ -136,10 +161,16 @@ exports.verifyAndCreateOrder = async (req, res) => {
       $push: { orders: newOrder._id }
     });
 
-    cart.items = [];
-    cart.totalQuantity = 0;
-    cart.subtotal = 0;
-    await cart.save();
+    // Clear cart ONLY if it was a cart checkout (not direct buy)
+    if (!productId) {
+      const cart = await Cart.findOne({ customerId });
+      if (cart) {
+        cart.items = [];
+        cart.totalQuantity = 0;
+        cart.subtotal = 0;
+        await cart.save();
+      }
+    }
 
     res.status(201).json({ success: true, order: newOrder });
   } catch (err) {
@@ -147,25 +178,21 @@ exports.verifyAndCreateOrder = async (req, res) => {
   }
 };
 
-// Step 3: Create Cash on Delivery (COD) Order
+// Step 3: Create Cash on Delivery (COD) Order (supports Direct Buy & Cart)
 exports.createCodOrder = async (req, res) => {
   try {
-    const { customerId, shippingAddress } = req.body;
+    const { customerId, shippingAddress, productId, quantity } = req.body;
 
-    const cart = await Cart.findOne({ customerId }).populate('items.productId');
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ error: 'Cart is empty' });
-    }
-
-    const shippingInfo = calculateShipping(shippingAddress, cart.subtotal);
-    const finalTotalAmount = cart.subtotal + shippingInfo.cost;
+    const { orderItems, subtotal } = await resolveOrderItemsAndSubtotal({ customerId, productId, quantity });
+    const shippingInfo = calculateShipping(shippingAddress, subtotal);
+    const finalTotalAmount = subtotal + shippingInfo.cost;
     const orderNumber = `ES-COD-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const newOrder = new Order({
       customerId,
       orderNumber,
-      items: cart.items,
-      subtotal: cart.subtotal,
+      items: orderItems,
+      subtotal,
       shippingCost: shippingInfo.cost,
       shippingMethod: shippingInfo.method,
       totalAmount: finalTotalAmount,
@@ -184,10 +211,16 @@ exports.createCodOrder = async (req, res) => {
       $push: { orders: newOrder._id }
     });
 
-    cart.items = [];
-    cart.totalQuantity = 0;
-    cart.subtotal = 0;
-    await cart.save();
+    // Clear cart ONLY if it was a cart checkout
+    if (!productId) {
+      const cart = await Cart.findOne({ customerId });
+      if (cart) {
+        cart.items = [];
+        cart.totalQuantity = 0;
+        cart.subtotal = 0;
+        await cart.save();
+      }
+    }
 
     res.status(201).json({ success: true, order: newOrder });
   } catch (err) {
@@ -195,53 +228,34 @@ exports.createCodOrder = async (req, res) => {
   }
 };
 
-// ERP Dashboard: Get All Orders
+// ERP Dashboard methods remain unchanged...
 exports.getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
-      .populate('customerId')
-      .populate('items.productId')
-      .sort({ createdAt: -1 });
-
-    // Map customerId property to customer alias for frontend ERP table support
+    const orders = await Order.find().populate('customerId').populate('items.productId').sort({ createdAt: -1 });
     const formattedOrders = orders.map(ord => {
       const obj = ord.toObject();
       obj.customer = obj.customerId;
       return obj;
     });
-
     res.status(200).json(formattedOrders);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ERP Dashboard: Update Order Status (Fulfillment / Financial)
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedOrder = await Order.findByIdAndUpdate(
-      id, 
-      { ...req.body }, 
-      { new: true }
-    )
-      .populate('customerId')
-      .populate('items.productId');
-
-    if (!updatedOrder) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
+    const updatedOrder = await Order.findByIdAndUpdate(id, { ...req.body }, { new: true }).populate('customerId').populate('items.productId');
+    if (!updatedOrder) return res.status(404).json({ error: 'Order not found' });
     const obj = updatedOrder.toObject();
     obj.customer = obj.customerId;
-
     res.status(200).json(obj);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
 
-// ERP Dashboard: Delete Order
 exports.deleteOrder = async (req, res) => {
   try {
     const { id } = req.params;
