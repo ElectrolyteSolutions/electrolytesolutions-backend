@@ -256,6 +256,42 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+
+
+exports.cancelOrder = async (req, res) => {
+  console.log("REQUEST RECIVED")
+  
+  try {
+    const { id } = req.params;
+    const customerId = req.user.id; // Extracted from your protect middleware
+
+    const order = await Order.findOne({ _id: id, customerId });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found or unauthorized' });
+    }
+
+    // Optional check: Prevent cancelling if already delivered or dispatched
+    if (['dispatched', 'delivered', 'cancelled'].includes(order.fulfillmentStatus?.toLowerCase())) {
+      return res.status(400).json({ error: `Cannot cancel an order that is already ${order.fulfillmentStatus}` });
+    }
+
+    order.fulfillmentStatus = 'cancelled';
+    const updatedOrder = await order.save();
+    
+    // Populate details to match your response format
+    const populatedOrder = await Order.findById(updatedOrder._id)
+      .populate('customerId')
+      .populate('items.productId');
+
+    const obj = populatedOrder.toObject();
+    obj.customer = obj.customerId;
+
+    res.status(200).json({ message: 'Order cancelled successfully', order: obj });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 exports.deleteOrder = async (req, res) => {
   try {
     const { id } = req.params;

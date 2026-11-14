@@ -151,10 +151,8 @@ exports.createCollection = async (req, res) => {
 };
 
 exports.getProductslist = async (req, res) => {
-  console.log("PRODUCT LIST RETRIEVED");
   try {
     const { collectionId, type, search, page = 1, limit = 20 ,id} = req.query;
-    console.log("USERd",id)
     let query = { status: 'active' };
 
     if (collectionId) query.collections = collectionId;

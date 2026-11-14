@@ -193,7 +193,15 @@ exports.googleOAuth = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const user = await Customer.findById(req.user.id).select('-password').populate('orders');
+    const user = await Customer.findById(req.user.id)
+      .select('-password')
+      .populate({
+        path: 'orders',
+        populate: {
+          path: 'items.productId', // Adjust 'items.productId' if your schema uses a different field name like 'items.product'
+          model: 'Product'
+        }
+      });
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
