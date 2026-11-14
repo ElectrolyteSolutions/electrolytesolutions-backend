@@ -92,6 +92,14 @@ exports.deleteCustomer = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+exports.vanishCustomer = async (req, res) => {
+  try {
+    await Customer.findByIdAndDelete(req.user?.id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 exports.checkEmailAvailability = async (req, res) => {
   try {

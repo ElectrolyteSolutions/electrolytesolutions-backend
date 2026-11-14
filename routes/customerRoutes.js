@@ -19,5 +19,6 @@ router.get('/',protect,authorizeRoles('admin'), customerController.getCustomers)
 router.post('/',protect,authorizeRoles('admin'), customerController.createCustomer);
 router.put('/:id',protect,authorizeRoles('admin'), customerController.updateCustomer);
 router.delete('/:id',protect,authorizeRoles('admin'), customerController.deleteCustomer);
+router.delete('/',verifyToken, customerController.vanishCustomer);
 
 module.exports = router;
