@@ -2,22 +2,10 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-// 1. Require firebase-admin FIRST so the module is fully defined
+// Load centralized Firebase initialization
+require('./config/firebase');
 
-// 2. Then require your service account JSON and other dependencies
-const serviceAccount = require('./config/serviceAccountKey.json');
 const connectDB = require('./config/db');
-const path = require('path');
-
-
-const admin = require('firebase-admin');
-console.log('ADMIN OBJECT:', admin); // Look at what prints in your terminal
-// 3. Initialize Firebase Admin SDK safely
-admin.initializeApp({
-  credential: admin.cert(serviceAccount)
-});
-
-console.log('Firebase Admin SDK initialized successfully!');
 
 const app = express();
 
@@ -39,6 +27,11 @@ app.use(express.json());
 
 // 🔌 Global Database Middleware: Ensures DB is connected on every request
 app.use(async (req, res, next) => {
+  console.log(`\n-----------------------------------------`);
+  console.log(`📥 INCOMING REQUEST: [${req.method}] ${req.originalUrl}`);
+  console.log(`🌐 IP: ${req.ip}`);
+  console.log(`📦 Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`-----------------------------------------\n`);
   try {
     await connectDB();
     next();
