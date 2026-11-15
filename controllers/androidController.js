@@ -56,3 +56,48 @@ exports.broadcastNotification = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+
+// Send notification to a selected device token or database ID
+exports.sendToDevice = async (req, res) => {
+  try {
+    const { token, deviceId, title, body, data } = req.body;
+
+    let targetToken = token;
+
+    // If a database ID was passed instead of the raw token, look it up
+    if (!targetToken && deviceId) {
+      const record = await Android.findById(deviceId);
+      if (record) {
+        targetToken = record.token;
+      }
+    }
+
+    if (!targetToken) {
+      return res.status(400).json({ error: 'A valid device token or deviceId is required.' });
+    }
+
+    const message = {
+      to: targetToken,
+      sound: 'default',
+      title: title || 'ElectroStore Update 🚀',
+      body: body || 'Check out our latest products!',
+      data: data || { screen: 'ShopTab' },
+    };
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message), // Expo push API accepts a single message object
+    });
+
+    const result = await response.json();
+    res.status(200).json({ success: true, targetToken, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
