@@ -1,3 +1,4 @@
+const admin = require('firebase-admin');
 const Android = require('../models/Androids');
 
 // Register or update android push token
@@ -6,7 +7,6 @@ exports.registerAndroid = async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token is required' });
 
-    // Upsert using returnDocument: 'after' to eliminate Mongoose warnings
     await Android.findOneAndUpdate(
       { token },
       { token, updatedAt: Date.now() },
@@ -20,7 +20,7 @@ exports.registerAndroid = async (req, res) => {
   }
 };
 
-// Broadcast notification to all stored androids
+// Broadcast notification to all stored androids using Firebase FCM
 exports.broadcastNotification = async (req, res) => {
   try {
     const { title, body, data } = req.body;
@@ -32,40 +32,33 @@ exports.broadcastNotification = async (req, res) => {
       return res.status(400).json({ error: 'No androids registered in database.' });
     }
 
-    const messages = tokens.map(token => ({
-      to: token,
-      sound: 'default',
-      title: title || 'ElectroStore Update 🚀',
-      body: body || 'Check out our latest products!',
-      data: data || { screen: 'ShopTab' },
-    }));
-
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
+    const message = {
+      tokens: tokens, // Firebase multicast accepts an array of raw FCM tokens
+      notification: {
+        title: title || 'Electrolyte Admin 🚀',
+        body: body || 'New update available!',
       },
-      body: JSON.stringify(messages),
-    });
+      data: data || {},
+    };
 
-    const result = await response.json();
-    res.status(200).json({ success: true, sentCount: tokens.length, result });
+    const response = await admin.messaging().sendEachForMulticast(message);
+    res.status(200).json({ 
+      success: true, 
+      successCount: response.successCount, 
+      failureCount: response.failureCount 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-
-// Send notification to a selected device token or database ID
+// Send notification to a selected device token or database ID using Firebase FCM
 exports.sendToDevice = async (req, res) => {
   try {
     const { token, deviceId, title, body, data } = req.body;
 
     let targetToken = token;
 
-    // If a database ID was passed instead of the raw token, look it up
     if (!targetToken && deviceId) {
       const record = await Android.findById(deviceId);
       if (record) {
@@ -78,25 +71,16 @@ exports.sendToDevice = async (req, res) => {
     }
 
     const message = {
-      to: targetToken,
-      sound: 'default',
-      title: title || 'ElectroStore Update 🚀',
-      body: body || 'Check out our latest products!',
-      data: data || { screen: 'ShopTab' },
+      token: targetToken, // Raw FCM token
+      notification: {
+        title: title || 'Electrolyte Admin 🚀',
+        body: body || 'New notification received.',
+      },
+      data: data || {},
     };
 
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message), // Expo push API accepts a single message object
-    });
-
-    const result = await response.json();
-    res.status(200).json({ success: true, targetToken, result });
+    const response = await admin.messaging().send(message);
+    res.status(200).json({ success: true, messageId: response });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
