@@ -8,11 +8,13 @@ if (!admin || typeof admin.initializeApp !== 'function') {
   throw new Error(`❌ firebase-admin loaded as "${typeof admin}". Your node_modules/firebase-admin folder is corrupted.`);
 }
 
-const serviceAccount = require('./serviceAccountKey.json');
 
 if (!admin.apps || admin.apps.length === 0) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')})
   });
   console.log('🔥 Firebase Admin successfully initialized!');
 }
