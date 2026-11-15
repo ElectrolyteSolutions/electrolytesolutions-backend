@@ -1,7 +1,23 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const connectDB = require('./config/db'); // Import the connection helper
+
+// 1. Require firebase-admin FIRST so the module is fully defined
+
+// 2. Then require your service account JSON and other dependencies
+const serviceAccount = require('./config/serviceAccountKey.json');
+const connectDB = require('./config/db');
+const path = require('path');
+
+
+const admin = require('firebase-admin');
+console.log('ADMIN OBJECT:', admin); // Look at what prints in your terminal
+// 3. Initialize Firebase Admin SDK safely
+admin.initializeApp({
+  credential: admin.cert(serviceAccount)
+});
+
+console.log('Firebase Admin SDK initialized successfully!');
 
 const app = express();
 
@@ -11,13 +27,12 @@ const productRoutes = require('./routes/productRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const billingRoutes = require('./routes/billingRoutes');
 const userRoutes = require('./routes/userRoutes');
-const cartRoutes = require('./routes/cartRoutes')
-const orderRoutes = require('./routes/orderRoutes')
-const collectionRoutes = require('./routes/collectionRoutes')
-const locationRoutes = require('./routes/locationRoutes')
-const storeRoutes = require('./routes/storeRoutes')
+const cartRoutes = require('./routes/cartRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const collectionRoutes = require('./routes/collectionRoutes');
+const locationRoutes = require('./routes/locationRoutes');
+const storeRoutes = require('./routes/storeRoutes');
 
-// Mount routess
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -44,7 +59,7 @@ app.use('/billings', billingRoutes);
 app.use('/users', userRoutes);
 app.use('/android', androidRoutes);
 app.use('/carts', cartRoutes);
-app.use('/orders', orderRoutes) ;
+app.use('/orders', orderRoutes);
 app.use('/collections', collectionRoutes);
 app.use('/location', locationRoutes);
 app.use('/policies', storeRoutes);
