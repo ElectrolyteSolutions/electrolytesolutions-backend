@@ -9,5 +9,7 @@ router.delete('/token', androidController.deleteDeviceByToken);
 router.delete('/devices', androidController.deleteAllDevices);
 router.post('/broadcast', androidController.broadcastNotification);
 router.post('/send-to-device', androidController.sendToDevice);
+router.post('/send-to-user', androidController.sendToUserApi);
+router.post('/send-to-admin', androidController.sendToUserAdminApi);
 
 module.exports = router;

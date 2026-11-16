@@ -61,6 +61,57 @@ const sendNotificationToUser = async (userId, title, body, data = {}) => {
   }
 };
 
+const sendNotificationToAdmin = async (title, body, data = {}) => {
+  try {
+
+    // Find all devices registered to this user
+    const devices = await Android.find({ user: "admin" });
+    const tokens = devices.map(d => d.token).filter(token => token && typeof token === 'string');
+
+    if (tokens.length === 0) {
+      return { success: false, message: `No active device tokens found for user: ${userId}` };
+    }
+
+    const messaging = getMessaging();
+    let successCount = 0;
+    let failureCount = 0;
+    const errors = [];
+
+    // If user has multiple devices, send multicast or loop through single sends
+    if (tokens.length === 1) {
+      const message = {
+        token: tokens[0],
+        notification: {
+          title: title || 'Electrolyte Admin 🚀',
+          body: body || 'New notification received.',
+        },
+        data: data,
+      };
+      const response = await messaging.send(message);
+      return { success: true, messageId: response, successCount: 1, failureCount: 0 };
+    } else {
+      const message = {
+        tokens: tokens,
+        notification: {
+          title: title || 'Electrolyte Admin 🚀',
+          body: body || 'New notification received.',
+        },
+        data: data,
+      };
+      const response = await messaging.sendEachForMulticast(message);
+      return { 
+        success: true, 
+        successCount: response.successCount, 
+        failureCount: response.failureCount,
+        errors: response.responses.map((r, i) => (!r.success ? { token: tokens[i], error: r.error.message } : null)).filter(Boolean)
+      };
+    }
+  } catch (error) {
+    console.error(`Error sending notification to user ${userId}:`, error);
+    throw error;
+  }
+};
+
 // 1. Register or update android push token
 exports.registerAndroid = async (req, res) => {
   try {
@@ -233,6 +284,16 @@ exports.sendToUserApi = async (req, res) => {
     }
 
     const result = await sendNotificationToUser(userId, title, body, data);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+exports.sendToUserAdminApi = async (req, res) => {
+  try {
+    const {  title, body, data } = req.body;
+
+    const result = await sendNotificationToAdmin( title, body, data);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });

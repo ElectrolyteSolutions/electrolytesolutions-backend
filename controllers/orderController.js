@@ -4,6 +4,7 @@ const Order = require('../models/Orders');
 const Cart = require('../models/Carts');
 const Customer = require('../models/Customers');
 const Product = require('../models/Products'); // Ensure Product model is imported
+const { sendNotificationToUser, sendNotificationToAdmin } = require('./androidController'); // Adjust path as needed
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -100,6 +101,7 @@ exports.createRazorpayOrder = async (req, res) => {
       shippingMethod: shippingInfo.method,
       totalAmount: finalTotalAmount
     });
+    
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -172,6 +174,22 @@ exports.verifyAndCreateOrder = async (req, res) => {
       }
     }
 
+    // Trigger Notifications for Payment Success & Order Confirmation
+    try {
+      await sendNotificationToUser(
+        customerId,
+        "Payment Successful & Order Confirmed",
+        `Your payment was successful and order ${orderNumber} has been confirmed.`
+      );
+
+      await sendNotificationToAdmin(
+        "New Online Order Received",
+        `A new online prepaid order ${orderNumber} has been placed.`
+      );
+    } catch (notifErr) {
+      console.error("Notification error on verifyAndCreateOrder:", notifErr);
+    }
+
     res.status(201).json({ success: true, order: newOrder });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -222,6 +240,22 @@ exports.createCodOrder = async (req, res) => {
       }
     }
 
+    // Trigger Notifications (No Emojis)
+    try {
+      await sendNotificationToUser(
+        customerId,
+        "Order Placed Successfully",
+        `Your order ${orderNumber} has been placed successfully and is being processed.`
+      );
+      
+      await sendNotificationToAdmin(
+        "New COD Order Received",
+        `A new COD order ${orderNumber} has been placed.`
+      );
+    } catch (notifErr) {
+      console.error("Notification error on COD order:", notifErr);
+    }
+
     res.status(201).json({ success: true, order: newOrder });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -248,6 +282,22 @@ exports.updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const updatedOrder = await Order.findByIdAndUpdate(id, { ...req.body }, { new: true }).populate('customerId').populate('items.productId');
     if (!updatedOrder) return res.status(404).json({ error: 'Order not found' });
+    
+    try {
+      const targetCustomerId = updatedOrder.customerId?._id || updatedOrder.customerId;
+      const statusMessage = updatedOrder.fulfillmentStatus || 'updated';
+      
+      if (targetCustomerId) {
+        await sendNotificationToUser(
+          targetCustomerId,
+          "Order Status Updated",
+          `Your order ${updatedOrder.orderNumber} status is now: ${statusMessage}.`
+        );
+      }
+    } catch (notifErr) {
+      console.error("Notification error on order status update:", notifErr);
+    }
+    
     const obj = updatedOrder.toObject();
     obj.customer = obj.customerId;
     res.status(200).json(obj);
@@ -259,7 +309,6 @@ exports.updateOrderStatus = async (req, res) => {
 
 
 exports.cancelOrder = async (req, res) => {
-  console.log("REQUEST RECIVED")
   
   try {
     const { id } = req.params;
@@ -282,6 +331,21 @@ exports.cancelOrder = async (req, res) => {
     const populatedOrder = await Order.findById(updatedOrder._id)
       .populate('customerId')
       .populate('items.productId');
+
+      try {
+      await sendNotificationToUser(
+        customerId,
+        "Order Cancelled",
+        `Your order ${order.orderNumber} has been successfully cancelled.`
+      );
+
+      await sendNotificationToAdmin(
+        "Order Cancelled by Customer",
+        `Order ${order.orderNumber} has been cancelled by the customer.`
+      );
+    } catch (notifErr) {
+      console.error("Notification error on order cancellation:", notifErr);
+    }
 
     const obj = populatedOrder.toObject();
     obj.customer = obj.customerId;
