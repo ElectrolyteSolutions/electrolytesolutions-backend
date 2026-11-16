@@ -3,8 +3,8 @@ const crypto = require('crypto');
 const Order = require('../models/Orders');
 const Cart = require('../models/Carts');
 const Customer = require('../models/Customers');
-const Product = require('../models/Products'); // Ensure Product model is imported
-const { sendNotificationToUser, sendNotificationToAdmin } = require('./androidController'); // Adjust path as needed
+const Product = require('../models/Products');
+const { sendNotificationToUser, sendNotificationToAdmin } = require('./androidController');
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -46,7 +46,6 @@ const resolveOrderItemsAndSubtotal = async (body) => {
   let subtotal = 0;
 
   if (body.productId && body.quantity) {
-    // Direct Buy payload
     const product = await Product.findById(body.productId);
     if (!product) throw new Error('Direct buy product not found');
     
@@ -58,7 +57,6 @@ const resolveOrderItemsAndSubtotal = async (body) => {
     }];
     subtotal = itemPrice * Number(body.quantity);
   } else {
-    // Cart payload fallback
     const cart = await Cart.findOne({ customerId: body.customerId }).populate('items.productId');
     if (!cart || !cart.items || cart.items.length === 0) {
       throw new Error('Cart is empty and no direct product specified');
@@ -74,7 +72,7 @@ const resolveOrderItemsAndSubtotal = async (body) => {
   return { orderItems, subtotal };
 };
 
-// Step 1: Initialize Razorpay Order (supports Direct Buy & Cart)
+// Step 1: Initialize Razorpay Order
 exports.createRazorpayOrder = async (req, res) => {
   try {
     const { customerId, shippingAddress, productId, quantity } = req.body;
@@ -101,7 +99,6 @@ exports.createRazorpayOrder = async (req, res) => {
       shippingMethod: shippingInfo.method,
       totalAmount: finalTotalAmount
     });
-    
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -163,7 +160,6 @@ exports.verifyAndCreateOrder = async (req, res) => {
       $push: { orders: newOrder._id }
     });
 
-    // Clear cart ONLY if it was a cart checkout (not direct buy)
     if (!productId) {
       const cart = await Cart.findOne({ customerId });
       if (cart) {
@@ -174,7 +170,6 @@ exports.verifyAndCreateOrder = async (req, res) => {
       }
     }
 
-    // Trigger Notifications for Payment Success & Order Confirmation
     try {
       await sendNotificationToUser(
         customerId,
@@ -196,7 +191,7 @@ exports.verifyAndCreateOrder = async (req, res) => {
   }
 };
 
-// Step 3: Create Cash on Delivery (COD) Order (supports Direct Buy & Cart)
+// Step 3: Create Cash on Delivery (COD) Order
 exports.createCodOrder = async (req, res) => {
   try {
     const { customerId, shippingAddress, productId, quantity } = req.body;
@@ -229,7 +224,6 @@ exports.createCodOrder = async (req, res) => {
       $push: { orders: newOrder._id }
     });
 
-    // Clear cart ONLY if it was a cart checkout
     if (!productId) {
       const cart = await Cart.findOne({ customerId });
       if (cart) {
@@ -240,7 +234,6 @@ exports.createCodOrder = async (req, res) => {
       }
     }
 
-    // Trigger Notifications (No Emojis)
     try {
       await sendNotificationToUser(
         customerId,
@@ -262,7 +255,6 @@ exports.createCodOrder = async (req, res) => {
   }
 };
 
-// ERP Dashboard methods remain unchanged...
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find().populate('customerId').populate('items.productId').sort({ createdAt: -1 });
@@ -281,12 +273,13 @@ exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const updatedOrder = await Order.findByIdAndUpdate(id, { ...req.body }, { new: true }).populate('customerId').populate('items.productId');
+
     if (!updatedOrder) return res.status(404).json({ error: 'Order not found' });
     
     try {
       const targetCustomerId = updatedOrder.customerId?._id || updatedOrder.customerId;
       const statusMessage = updatedOrder.fulfillmentStatus || 'updated';
-      
+
       if (targetCustomerId) {
         await sendNotificationToUser(
           targetCustomerId,
@@ -306,20 +299,16 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
-
-
 exports.cancelOrder = async (req, res) => {
-  
   try {
     const { id } = req.params;
-    const customerId = req.user.id; // Extracted from your protect middleware
+    const customerId = req.user.id;
 
     const order = await Order.findOne({ _id: id, customerId });
     if (!order) {
       return res.status(404).json({ error: 'Order not found or unauthorized' });
     }
 
-    // Optional check: Prevent cancelling if already delivered or dispatched
     if (['dispatched', 'delivered', 'cancelled'].includes(order.fulfillmentStatus?.toLowerCase())) {
       return res.status(400).json({ error: `Cannot cancel an order that is already ${order.fulfillmentStatus}` });
     }
@@ -327,12 +316,11 @@ exports.cancelOrder = async (req, res) => {
     order.fulfillmentStatus = 'cancelled';
     const updatedOrder = await order.save();
     
-    // Populate details to match your response format
     const populatedOrder = await Order.findById(updatedOrder._id)
       .populate('customerId')
       .populate('items.productId');
 
-      try {
+    try {
       await sendNotificationToUser(
         customerId,
         "Order Cancelled",
