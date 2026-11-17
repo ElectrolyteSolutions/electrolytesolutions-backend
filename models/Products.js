@@ -21,6 +21,7 @@ const productSchema = new mongoose.Schema({
     attributes: Map // Size, Color, etc.
   }],
   images: [String],
+  poster:{ type:String,required:false },
   seo: {
     metaTitle: String,
     metaDescription: String,
