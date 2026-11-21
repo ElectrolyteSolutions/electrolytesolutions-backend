@@ -135,10 +135,29 @@ module.exports.registerAndroid = async (req, res) => {
 // 2. List all registered devices
 module.exports.listDevices = async (req, res) => {
   try {
-    const devices = await Android.find({}).sort({ updatedAt: -1 });
-    res.status(200).json({ success: true, count: devices.length, devices });
+    const devices = await Android.find({})
+      .populate({
+        path: 'userId',
+        select: '-password', // omit sensitive fields; adjust fields as needed
+      })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // If `userId` was not populated (missing, null, or invalid ref), `device.userId` stays null/undefined
+    // and won't break the query. Optionally normalize `user` explicitly:
+    const formattedDevices = devices.map(({ userId, ...rest }) => ({
+      ...rest,
+      user: userId && typeof userId === 'object' ? userId : null,
+      userId: userId && typeof userId === 'object' ? userId._id : userId ?? null,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formattedDevices.length,
+      devices: formattedDevices,
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
