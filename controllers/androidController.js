@@ -138,6 +138,7 @@ module.exports.listDevices = async (req, res) => {
     const devices = await Android.find({})
       .populate({
         path: 'userId',
+        model: 'Customer,
         select: '-password', // omit sensitive fields; adjust fields as needed
       })
       .sort({ updatedAt: -1 })
