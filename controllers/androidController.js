@@ -170,15 +170,7 @@ module.exports.listDevices = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-    res.status(200).json({
-      success: true,
-      count: formattedDevices.length,
-      devices: formattedDevices,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+   
 
 // 3. Delete a specific device by database ID
 module.exports.deleteDeviceById = async (req, res) => {
